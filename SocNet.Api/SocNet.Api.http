@@ -1,0 +1,335 @@
+@SocNet.Api_HostAddress = http://localhost:5119
+
+###
+# Аутентификация
+###
+
+# Регистрация пользователя
+POST {{SocNet.Api_HostAddress}}/auth/register
+Content-Type: application/json
+
+{
+  "nick": "testuser",
+  "password": "password123"
+}
+
+###
+
+# Вход в систему
+POST {{SocNet.Api_HostAddress}}/auth/login
+Content-Type: application/json
+
+{
+  "nick": "alice",
+  "password": "password123"
+}
+
+###
+
+###
+# Работа с пользователями (требуется токен)
+###
+
+# Получение профиля текущего пользователя
+GET {{SocNet.Api_HostAddress}}/users/profile
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Поиск пользователей
+GET {{SocNet.Api_HostAddress}}/users/search?query=alice&limit=10
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Обновление профиля
+PUT {{SocNet.Api_HostAddress}}/users/profile
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "nick": "new_nickname",
+  "avatarId": 1
+}
+
+###
+
+# Получение подписчиков пользователя
+GET {{SocNet.Api_HostAddress}}/users/1/followers?page=1&pageSize=20
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение подписок пользователя
+GET {{SocNet.Api_HostAddress}}/users/1/following?page=1&pageSize=20
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+###
+# Работа с постами
+###
+
+# Создание поста
+POST {{SocNet.Api_HostAddress}}/posts
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "text": "Мой новый пост в социальной сети!",
+  "answerToId": null
+}
+
+###
+
+# Создание ответа на пост
+POST {{SocNet.Api_HostAddress}}/posts
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "text": "Отличный пост!",
+  "answerToId": 1
+}
+
+###
+
+# Получение поста с ответами
+GET {{SocNet.Api_HostAddress}}/posts/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение ленты новостей
+GET {{SocNet.Api_HostAddress}}/posts/feed?page=1&pageSize=20
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение постов пользователя
+GET {{SocNet.Api_HostAddress}}/posts/user/1?page=1&pageSize=20
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Редактирование поста
+PUT {{SocNet.Api_HostAddress}}/posts/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "text": "Обновленный текст поста"
+}
+
+###
+
+# Удаление поста
+DELETE {{SocNet.Api_HostAddress}}/posts/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Лайк поста
+POST {{SocNet.Api_HostAddress}}/posts/1/like
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Удаление лайка
+DELETE {{SocNet.Api_HostAddress}}/posts/1/like
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Добавление в избранное
+POST {{SocNet.Api_HostAddress}}/posts/1/favorite
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Удаление из избранного
+DELETE {{SocNet.Api_HostAddress}}/posts/1/favorite
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение избранных постов
+GET {{SocNet.Api_HostAddress}}/posts/favorites?page=1&pageSize=20
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+###
+# Работа с подписками
+###
+
+# Подписаться на пользователя
+POST {{SocNet.Api_HostAddress}}/subscriptions/2
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Отписаться от пользователя
+DELETE {{SocNet.Api_HostAddress}}/subscriptions/2
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Проверить подписку
+GET {{SocNet.Api_HostAddress}}/subscriptions/2/status
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение количества подписок/подписчиков
+GET {{SocNet.Api_HostAddress}}/subscriptions/counts
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+###
+# Работа с чатами
+###
+
+# Получение списка чатов
+GET {{SocNet.Api_HostAddress}}/chats
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Создание чата с пользователем
+PUT {{SocNet.Api_HostAddress}}/chats/with/2
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение сообщений чата
+GET {{SocNet.Api_HostAddress}}/chats/1/messages?page=1&pageSize=50
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Отправка сообщения
+POST {{SocNet.Api_HostAddress}}/chats/1/messages
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "content": "Привет! Как дела?",
+  "filePath": null
+}
+
+###
+
+# Редактирование сообщения
+PUT {{SocNet.Api_HostAddress}}/chats/1/messages/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "content": "Исправленный текст сообщения",
+  "filePath": null
+}
+
+###
+
+# Удаление сообщения
+DELETE {{SocNet.Api_HostAddress}}/chats/1/messages/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+###
+# Модерация (требуются права администратора)
+###
+
+# Создание жалобы на пользователя
+POST {{SocNet.Api_HostAddress}}/reports/user/3
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "comment": "Пользователь нарушает правила"
+}
+
+###
+
+# Создание жалобы на пост
+POST {{SocNet.Api_HostAddress}}/reports/post/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "comment": "Неподобающий контент"
+}
+
+###
+
+# Получение жалобы
+GET {{SocNet.Api_HostAddress}}/reports/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение всех жалоб (админ)
+GET {{SocNet.Api_HostAddress}}/admin/reports?page=1&pageSize=50
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Отметить жалобу рассмотренной (админ)
+PUT {{SocNet.Api_HostAddress}}/admin/reports/1/reviewed
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Выдать бан (админ)
+POST {{SocNet.Api_HostAddress}}/admin/reports/1/ban
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "endDate": "2025-12-31T23:59:59Z",
+  "reason": "Нарушение правил сообщества"
+}
+
+###
+
+# Снять бан (админ)
+DELETE {{SocNet.Api_HostAddress}}/admin/bans/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Получение активных банов (админ)
+GET {{SocNet.Api_HostAddress}}/admin/bans?page=1&pageSize=50
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+###
+# Админ-функции для пользователей
+###
+
+# Получение всех пользователей (админ)
+GET {{SocNet.Api_HostAddress}}/admin/users?page=1&pageSize=50
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###
+
+# Изменение роли пользователя (админ)
+PUT {{SocNet.Api_HostAddress}}/admin/users/2/role
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "isAdmin": true
+}
+
+###
+
+# Удаление пользователя (админ)
+DELETE {{SocNet.Api_HostAddress}}/admin/users/2
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+###

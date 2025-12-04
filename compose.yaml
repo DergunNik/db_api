@@ -1,0 +1,34 @@
+﻿services:
+  socnet.api:
+    image: socnet.api
+    build:
+      context: .
+      dockerfile: SocNet.Api/Dockerfile
+    depends_on:
+      - postgres
+      
+  postgres:
+    image: postgres:17.6
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: socnet
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:9.8.0
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@test.com
+      PGADMIN_DEFAULT_PASSWORD: 123456
+      PGADMIN_LISTEN_PORT: 5454
+    ports:
+      - "5454:5454"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+    driver: local
