@@ -12,7 +12,8 @@ public static class SubscriptionApi
         var loggedApi = new SubscriptionApiLogged(config);
 
         var group = routes.MapGroup("/subscriptions")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithTags("Subs");
 
         group.MapPost("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user) =>
         {
@@ -22,7 +23,7 @@ public static class SubscriptionApi
                 return Results.BadRequest("Cannot subscribe to yourself");
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -118,5 +119,9 @@ public static class SubscriptionApi
         }
     }
 
-    public record SubscriptionCounts(int FollowersCount, int FollowingCount);
+    public class SubscriptionCounts
+    {
+        public int followers_count { get; set; }
+        public int following_count { get; set; }
+    }
 }

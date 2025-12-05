@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="27065d74-acc4-46c0-9d11-647975b18870" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/ChatApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/ChatApiNew.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/LoggedApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/LoggedApi.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/PostApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/PostApiNew.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Ban.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Ban.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Chat.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Chat.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Favorite.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Favorite.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Like.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Like.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Log.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Log.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Media.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Media.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Message.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Message.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Post.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Post.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Report.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Report.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Subscription.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Subscription.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/User.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/User.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/SQL/create.sql" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/SQL/create.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/SocNet.Api.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/SocNet.Api.csproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfo.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfo.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfoInputs.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfoInputs.cache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.assets.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.assets.cache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.dgspec.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.dgspec.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.props" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.props" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.targets" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.targets" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.assets.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.assets.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.nuget.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.nuget.cache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.packagespec.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.packagespec.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/rider.project.model.nuget.info" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/rider.project.model.nuget.info" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/rider.project.restore.info" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/rider.project.restore.info" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/compose.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/compose.yaml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 0
+}]]></component>
+  <component name="ProjectId" id="36On4roNxAdGYCO01oVIhYUJeJS" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Database Script.create.sql.executor": "Run",
+    "Database Script.test_data.sql.executor": "Run",
+    "Database Script.update_queries.sql.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Projects/C#/SocNet - Copy"
+  },
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "postgresql"
+    ],
+    "RunConfigurationTargetLRU": [
+      "2371e254-53cb-4498-811c-17d7a5be6405",
+      "aa642a4b-0acd-469b-a366-2723edf7757c",
+      "aa642a4b-0acd-469b-a366-2723edf7757c/database/\"postgres\"/schema/\"public\""
+    ]
+  }
+}]]></component>
+  <component name="RunManager" selected="Database Script.test_data.sql">
+    <configuration name="create.sql" type="DatabaseScript" editBeforeRun="true" temporary="true" nameIsGenerated="true">
+      <script-file value="$PROJECT_DIR$/SocNet.Api/SQL/create.sql" />
+      <script-mode>FILE</script-mode>
+      <data-source id="2371e254-53cb-4498-811c-17d7a5be6405" />
+      <method v="2" />
+    </configuration>
+    <configuration name="test_data.sql" type="DatabaseScript" editBeforeRun="true" temporary="true" nameIsGenerated="true">
+      <script-file value="$PROJECT_DIR$/SocNet.Api/SQL/test_data.sql" />
+      <script-mode>FILE</script-mode>
+      <data-source id="2371e254-53cb-4498-811c-17d7a5be6405" />
+      <method v="2" />
+    </configuration>
+    <configuration name="update_queries.sql" type="DatabaseScript" editBeforeRun="true" temporary="true" nameIsGenerated="true">
+      <script-file value="$PROJECT_DIR$/SocNet.Api/SQL/update_queries.sql" />
+      <script-mode>FILE</script-mode>
+      <data-source id="aa642a4b-0acd-469b-a366-2723edf7757c" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Database Script.test_data.sql" />
+        <item itemvalue="Database Script.create.sql" />
+        <item itemvalue="Database Script.update_queries.sql" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="27065d74-acc4-46c0-9d11-647975b18870" name="Changes" comment="" />
+      <created>1764886297177</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1764886297177</updated>
+    </task>
+    <servers />
+  </component>
+</project>

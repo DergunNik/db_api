@@ -14,7 +14,7 @@ public abstract class LoggedApi
                             ?? throw new Exception("Connection string not found");
     }
 
-    protected async Task LogAction(long? userId, string action)
+    public async Task LogAction(long? userId, string action)
     {
         try
         {

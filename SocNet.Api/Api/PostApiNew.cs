@@ -13,31 +13,32 @@ public static class PostApi
         var loggedApi = new PostApiLogged(config);
 
         var group = routes.MapGroup("/posts")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithTags("Posts");
 
         group.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var sql = @"INSERT INTO post (text, author_id, answer_to_id)
                        VALUES (@text, @authorId, @answerToId)
-                       RETURNING id, text, author_id, answer_to_id, created_at";
+                       RETURNING *";
 
             var post = await db.QueryFirstAsync<Post>(sql, new
             {
-                text = req.Text,
+                text = req.text,
                 authorId = userId,
-                answerToId = req.AnswerToId
+                answerToId = req.answer_to_id
             });
 
-            await loggedApi.LogAction(userId, $"Created post {post.Id}");
+            await loggedApi.LogAction(userId, $"Created post {post.id}");
 
-            return Results.Created($"/posts/{post.Id}", post);
+            return Results.Created($"/posts/{post.id}", post);
         });
 
         group.MapGet("/{postId:long}", async (long postId) =>
@@ -130,11 +131,11 @@ public static class PostApi
                 return Results.NotFound();
 
             if (authorId.Value != userId)
-                return Results.Forbidden("Only author can edit post");
+                return Results.BadRequest("Only author can edit post");
 
             await db.ExecuteAsync(
                 "UPDATE post SET text = @text WHERE id = @postId",
-                new { postId, text = req.Text });
+                new { postId, text = req.text });
 
             await loggedApi.LogAction(userId, $"Edited post {postId}");
 
@@ -155,7 +156,7 @@ public static class PostApi
                 return Results.NotFound();
 
             if (authorId.Value != userId)
-                return Results.Forbidden("Only author can delete post");
+                return Results.BadRequest("Only author can delete post");
 
             await db.ExecuteAsync("DELETE FROM post WHERE id = @postId", new { postId });
 
@@ -169,7 +170,7 @@ public static class PostApi
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -295,27 +296,36 @@ public static class PostApi
         }
     }
 
-    public record CreatePostRequest(string Text, long? AnswerToId);
+    public class CreatePostRequest
+    {
+        public string text { get; set; } = string.Empty;
+        public long? answer_to_id { get; set; }
+    }
 
-    public record UpdatePostRequest(string Text);
+    public class UpdatePostRequest
+    {
+        public string text { get; set; } = string.Empty;
+    }
 
-    public record PostDetails(
-        long Id,
-        string? Text,
-        long? AnswerToId,
-        DateTime CreatedAt,
-        string AuthorNick,
-        long AuthorId,
-        string? AuthorAvatar,
-        int LikesCount,
-        int RepliesCount
-    );
+    public class PostDetails
+    {
+        public long id { get; set; }
+        public string? text { get; set; }
+        public long? answer_to_id { get; set; }
+        public DateTime created_at { get; set; }
+        public string author_nick { get; set; } = string.Empty;
+        public long author_id { get; set; }
+        public string? author_avatar { get; set; }
+        public int likes_count { get; set; }
+        public int replies_count { get; set; }
+    }
 
-    public record PostSummary(
-        long Id,
-        string? Text,
-        DateTime CreatedAt,
-        string AuthorNick,
-        int LikesCount
-    );
+    public class PostSummary
+    {
+        public long id { get; set; }
+        public string? text { get; set; }
+        public DateTime created_at { get; set; }
+        public string author_nick { get; set; } = string.Empty;
+        public int likes_count { get; set; }
+    }
 }

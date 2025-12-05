@@ -1,10 +1,10 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Message
 {
-    public long Id { get; set; }
-    public long? AuthorId { get; set; }
-    public long ChatId { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public string Content { get; set; } = string.Empty;
+    public long id { get; set; }
+    public long? author_id { get; set; }
+    public long chat_id { get; set; }
+    public DateTime created_at { get; set; }
+    public string content { get; set; } = string.Empty;
 }

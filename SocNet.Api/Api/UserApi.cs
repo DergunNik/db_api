@@ -14,7 +14,8 @@ public static class UserApi
         var loggedApi = new UserApiLogged(config);
 
         var group = routes.MapGroup("/users")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithTags("Users");
 
         group.MapGet("/profile", async (ClaimsPrincipal user) =>
         {
@@ -59,11 +60,11 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            if (!string.IsNullOrWhiteSpace(req.Nick))
+            if (!string.IsNullOrWhiteSpace(req.nick))
             {
                 var existing = await db.QueryFirstOrDefaultAsync<long?>(
                     @"SELECT id FROM ""user"" WHERE nick = @nick AND id != @userId",
-                    new { nick = req.Nick, userId });
+                    new { nick = req.nick, userId });
 
                 if (existing.HasValue)
                     return Results.Conflict("Nick already taken");
@@ -73,16 +74,16 @@ public static class UserApi
             var parameters = new DynamicParameters();
             parameters.Add("userId", userId);
 
-            if (!string.IsNullOrWhiteSpace(req.Nick))
+            if (!string.IsNullOrWhiteSpace(req.nick))
             {
                 updateFields.Add("nick = @nick");
-                parameters.Add("nick", req.Nick);
+                parameters.Add("nick", req.nick);
             }
 
-            if (req.AvatarId.HasValue)
+            if (req.avatar_id.HasValue)
             {
                 updateFields.Add("avatar_id = @avatarId");
-                parameters.Add("avatarId", req.AvatarId.Value);
+                parameters.Add("avatarId", req.avatar_id.Value);
             }
 
             if (updateFields.Any())
@@ -129,7 +130,8 @@ public static class UserApi
         });
 
         var adminGroup = routes.MapGroup("/admin/users")
-            .RequireAuthorization(policy => policy.RequireRole("Admin"));
+            .RequireAuthorization(policy => policy.RequireRole("Admin"))
+            .WithTags("Admin");
 
         adminGroup.MapGet("/", async (int page = 1, int pageSize = 50) =>
         {
@@ -157,9 +159,9 @@ public static class UserApi
 
             await db.ExecuteAsync(
                 "UPDATE \"user\" SET is_admin = @isAdmin WHERE id = @userId",
-                new { userId, isAdmin = req.IsAdmin });
+                new { userId, isAdmin = req.is_admin });
 
-            await loggedApi.LogAction(adminId, $"Changed user {userId} role to {(req.IsAdmin ? "admin" : "user")}");
+            await loggedApi.LogAction(adminId, $"Changed user {userId} role to {(req.is_admin ? "admin" : "user")}");
 
             return Results.Ok();
         });
@@ -192,33 +194,53 @@ public static class UserApi
     }
 
     // DTOs
-    public record UserProfile(
-        long Id,
-        string Nick,
-        bool IsAdmin,
-        DateTime CreatedAt,
-        string? AvatarPath,
-        int FollowersCount,
-        int FollowingCount,
-        int PostsCount
-    );
+    public class UserProfile
+    {
+        public long id { get; set; }
+        public string nick { get; set; } = string.Empty;
+        public bool is_admin { get; set; }
+        public DateTime created_at { get; set; }
+        public string? avatar_path { get; set; }
+        public int followers_count { get; set; }
+        public int following_count { get; set; }
+        public int posts_count { get; set; }
+    }
 
-    public record UserSearchResult(long Id, string Nick, string? AvatarPath);
+    public class UserSearchResult
+    {
+        public long id { get; set; }
+        public string nick { get; set; } = string.Empty;
+        public string? avatar_path { get; set; }
+    }
 
-    public record UserSummary(long Id, string Nick, string? AvatarPath, DateTime RelationDate);
+    public class UserSummary
+    {
+        public long id { get; set; }
+        public string nick { get; set; } = string.Empty;
+        public string? avatar_path { get; set; }
+        public DateTime relation_date { get; set; }
+    }
 
-    public record UserAdminView(
-        long Id,
-        string Nick,
-        bool IsAdmin,
-        DateTime CreatedAt,
-        string? AvatarPath,
-        bool IsBanned,
-        string? BanReason,
-        DateTime? BanEndDate
-    );
+    public class UserAdminView
+    {
+        public long id { get; set; }
+        public string nick { get; set; } = string.Empty;
+        public bool is_admin { get; set; }
+        public DateTime created_at { get; set; }
+        public string? avatar_path { get; set; }
+        public bool is_banned { get; set; }
+        public string? ban_reason { get; set; }
+        public DateTime? ban_end_date { get; set; }
+    }
 
-    public record UpdateProfileRequest(string? Nick, long? AvatarId);
+    public class UpdateProfileRequest
+    {
+        public string? nick { get; set; }
+        public long? avatar_id { get; set; }
+    }
 
-    public record UpdateRoleRequest(bool IsAdmin);
+    public class UpdateRoleRequest
+    {
+        public bool is_admin { get; set; }
+    }
 }

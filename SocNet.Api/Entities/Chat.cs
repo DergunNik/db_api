@@ -1,9 +1,9 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Chat
 {
-    public long Id { get; set; }
-    public long FirstUserId { get; set; }
-    public long SecondUserId { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public long id { get; set; }
+    public long first_user_id { get; set; }
+    public long second_user_id { get; set; }
+    public DateTime created_at { get; set; }
 }

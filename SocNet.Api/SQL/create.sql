@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS log CASCADE;
 DROP TABLE IF EXISTS ban CASCADE;
 DROP TABLE IF EXISTS report CASCADE;
 DROP TABLE IF EXISTS message CASCADE;
+DROP TABLE IF EXISTS chat_read_status CASCADE;
 DROP TABLE IF EXISTS chat CASCADE;
 DROP TABLE IF EXISTS subscription CASCADE;
 DROP TABLE IF EXISTS favorite CASCADE;
@@ -17,13 +18,13 @@ CREATE TABLE "user" (
                         nick VARCHAR(100) NOT NULL UNIQUE,
                         password_hash TEXT NOT NULL,
                         avatar_id BIGINT,
-                        is_admin BOOLEAN NOT NULL,
+                        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 CREATE TABLE media (
                        id BIGSERIAL PRIMARY KEY,
-                       file_path TEXT NOT NULL,
+                       file_path TEXT NOT NULL
 );
 
 CREATE TABLE post (

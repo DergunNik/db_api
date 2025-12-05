@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using SocNet.Api.Api;
 
@@ -49,7 +50,9 @@ builder.Services.AddAuthentication(options =>
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(key)),
-            ValidateLifetime = true
+            ValidateLifetime = true,
+            ValidateIssuer = false,
+            ValidateAudience = false
         };
     });
 
@@ -57,7 +60,7 @@ builder.Services.AddAuthorization();
 
 // builder.Services.ConfigureHttpJsonOptions(options =>
 // {
-//     // options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
+//     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
 // });
 
 
@@ -78,3 +81,8 @@ app.MapReportEndpoints(configuration);
 
 app.Run();
 
+// [JsonSerializable(typeof(AuthApi.RegisterRequest))]
+// [JsonSerializable(typeof(AuthApi.LoginRequest))]
+// public partial class AppJsonSerializerContext : JsonSerializerContext
+// {
+// }

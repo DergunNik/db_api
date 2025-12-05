@@ -4,6 +4,9 @@
     build:
       context: .
       dockerfile: SocNet.Api/Dockerfile
+    ports:
+      - "5119:5119"
+      - "8080:8080"
     depends_on:
       - postgres
       

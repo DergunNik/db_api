@@ -1,12 +1,12 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Ban
 {
-    public long Id { get; set; }
-    public long BannedUserId { get; set; }
-    public long? AdminId { get; set; }
-    public long? ReportId { get; set; }
-    public DateTime StartDate { get; set; }
-    public DateTime? EndDate { get; set; }
-    public string? Reason { get; set; }
+    public long id { get; set; }
+    public long banned_user_id { get; set; }
+    public long? admin_id { get; set; }
+    public long? report_id { get; set; }
+    public DateTime start_date { get; set; }
+    public DateTime? end_date { get; set; }
+    public string? reason { get; set; }
 }

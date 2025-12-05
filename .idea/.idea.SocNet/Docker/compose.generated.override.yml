@@ -1,0 +1,21 @@
+# This is a generated file. Not intended for manual editing.
+services:
+  socnet.api:
+    build:
+      context: "C:\\Projects\\C#\\SocNet - Copy"
+      dockerfile: "SocNet.Api/Dockerfile"
+      target: "base"
+    command: []
+    entrypoint:
+    - "dotnet"
+    - "/app/bin/Debug/net8.0/SocNet.Api.dll"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    image: "socnet.api:dev"
+    ports: []
+    volumes:
+    - "C:\\Projects\\C#\\SocNet - Copy\\SocNet.Api:/app:rw"
+    - "C:\\Projects\\C#\\SocNet - Copy:/src:rw"
+    - "C:\\Users\\Микалай\\.nuget\\packages:/home/app/.nuget/packages"
+    working_dir: "/app"

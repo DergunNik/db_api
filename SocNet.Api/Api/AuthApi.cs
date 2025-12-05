@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -16,7 +16,6 @@ public static class AuthApi
     private static string? _jwtKey;
     private static int _jwtExpiryMinutes;
 
-    // Функция для журналирования действий пользователей
     private static async Task LogAction(long? userId, string action, IDbConnection db)
     {
         try
@@ -27,7 +26,6 @@ public static class AuthApi
         }
         catch (Exception ex)
         {
-            // Логирование ошибки журналирования (без рекурсии)
             Console.WriteLine($"Failed to log action: {ex.Message}");
         }
     }
@@ -47,22 +45,22 @@ public static class AuthApi
         
         group.MapPost("/register", async (RegisterRequest req) =>
         {
-            if (string.IsNullOrWhiteSpace(req.Nick) || string.IsNullOrWhiteSpace(req.Password))
+            if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
                 return Results.BadRequest("Nick and Password required.");
 
-            string hash = BCrypt.Net.BCrypt.HashPassword(req.Password);
+            var hash = BCrypt.Net.BCrypt.HashPassword(req.password);
 
             using IDbConnection db = new NpgsqlConnection(_connectionString);
             var existing = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
-                new { nick = req.Nick });
+                new { nick = req.nick });
             if (existing is not null)
                 return Results.Conflict("User already exists.");
-            
-            var insertSql = "INSERT INTO \"user\"(nick, password_hash, created_at) VALUES (@nick, @hash, now()) RETURNING id;";
-            var newId = await db.ExecuteScalarAsync<long>(insertSql, new { nick = req.Nick, hash });
 
-            await LogAction(newId, $"User registered with nick: {req.Nick}", db);
+            var insertSql = "INSERT INTO \"user\"(nick, password_hash, created_at) VALUES (@nick, @hash, now()) RETURNING id;";
+            var newId = await db.ExecuteScalarAsync<long>(insertSql, new { nick = req.nick, hash });
+
+            await LogAction(newId, $"User registered with nick: {req.nick}", db);
 
             return Results.Created();
         });
@@ -70,22 +68,22 @@ public static class AuthApi
         
         group.MapPost("/login", async (LoginRequest req) =>
         {
-            if (string.IsNullOrWhiteSpace(req.Nick) || string.IsNullOrWhiteSpace(req.Password))
+            if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
                 return Results.BadRequest("Nick and Password required.");
 
             using IDbConnection db = new NpgsqlConnection(_connectionString);
             var user = await db.QueryFirstOrDefaultAsync<User>(
-                "SELECT id, nick, password_hash, created_at FROM \"user\" WHERE nick = @nick",
-                new { nick = req.Nick });
+                "SELECT * FROM \"user\" WHERE nick = @nick",
+                new { nick = req.nick });
 
             if (user is null)
                 return Results.NotFound("User not found");
 
-            var passwordHash = user.PasswordHash;
-            if (string.IsNullOrEmpty(passwordHash) || !BCrypt.Net.BCrypt.Verify(req.Password, passwordHash))
-                return Results.Unauthorized();
+            var passwordHash = user.password_hash;
+            if (string.IsNullOrEmpty(passwordHash) || !BCrypt.Net.BCrypt.Verify(req.password, passwordHash))
+                return Results.BadRequest($"{req.password}_{passwordHash}_{user.created_at}_{user.id}");
 
-            await LogAction(user.Id, $"User logged in", db);
+            await LogAction(user.id, $"User logged in", db);
 
             var token = GenerateJwt(user);
 
@@ -103,9 +101,9 @@ public static class AuthApi
 
         var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Nick),
-            new Claim(ClaimTypes.Role, user.IsAdmin ? "Admin" : "User")
+            new Claim(JwtRegisteredClaimNames.Sub, user.id.ToString()),
+            new Claim(ClaimTypes.Name, user.nick),
+            new Claim(ClaimTypes.Role, user.is_admin ? "Admin" : "User")
         };
 
         var token = new JwtSecurityToken(
@@ -116,6 +114,15 @@ public static class AuthApi
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    public record RegisterRequest(string Nick, string Password);
-    public record LoginRequest(string Nick, string Password);
+    public class RegisterRequest
+    {
+        public string nick { get; set; } = string.Empty;
+        public string password { get; set; } = string.Empty;
+    }
+
+    public class LoginRequest
+    {
+        public string nick { get; set; } = string.Empty;
+        public string password { get; set; } = string.Empty;
+    }
 }

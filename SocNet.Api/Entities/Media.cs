@@ -1,7 +1,7 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Media
 {
-    public long Id { get; set; }
-    public string FilePath { get; set; } = string.Empty;
+    public long id { get; set; }
+    public string file_path { get; set; } = string.Empty;
 }

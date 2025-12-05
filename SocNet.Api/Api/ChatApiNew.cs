@@ -12,7 +12,8 @@ public static class ChatApi
         var loggedApi = new ChatApiLogged(config);
 
         var group = routes.MapGroup("/chats")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithTags("Chat");
 
         group.MapGet("/", async (ClaimsPrincipal user, int page = 1, int pageSize = 20) =>
         {
@@ -52,7 +53,7 @@ public static class ChatApi
                 return Results.BadRequest("Cannot create chat with yourself");
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -101,7 +102,7 @@ public static class ChatApi
                 new { chatId, userId });
 
             if (!hasAccess)
-                return Results.Forbidden("No access to this chat");
+                return Results.BadRequest("No access to this chat");
 
             var messages = await db.QueryAsync<MessageDetails>(
                 @"SELECT m.id, m.content, m.created_at,
@@ -128,9 +129,9 @@ public static class ChatApi
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
-            if (string.IsNullOrWhiteSpace(req.Content))
+            if (string.IsNullOrWhiteSpace(req.content))
                 return Results.BadRequest("Message content cannot be empty");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -143,29 +144,30 @@ public static class ChatApi
                 new { chatId, userId });
 
             if (!hasAccess)
-                return Results.Forbidden("No access to this chat");
+                return Results.BadRequest("No access to this chat");
 
             var message = await db.QueryFirstAsync<MessageDetails>(
                 @"INSERT INTO message (author_id, chat_id, content, file_path)
                   VALUES (@authorId, @chatId, @content, @filePath)
-                  RETURNING id, content, created_at",
+                  RETURNING *",
                 new
                 {
                     authorId = userId,
                     chatId,
-                    content = req.Content,
-                    filePath = req.FilePath
+                    content = req.content,
+                    filePath = req.file_path
                 });
 
             var authorInfo = await db.QueryFirstAsync<dynamic>(
                 @"SELECT nick, id FROM ""user"" WHERE id = @userId",
                 new { userId });
 
-            message = message with { AuthorNick = authorInfo.nick, AuthorId = authorInfo.id };
+            message.author_nick = authorInfo.nick;
+            message.author_id = authorInfo.id;
 
             await loggedApi.LogAction(userId, $"Sent message in chat {chatId}");
 
-            return Results.Created($"/chats/{chatId}/messages/{message.Id}", message);
+            return Results.Created($"/chats/{chatId}/messages/{message.id}", message);
         });
 
         group.MapPut("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, UpdateMessageRequest req, ClaimsPrincipal user) =>
@@ -182,12 +184,12 @@ public static class ChatApi
                 return Results.NotFound("Message not found");
 
             if ((long)messageInfo.author_id != userId)
-                return Results.Forbidden("Only author can edit message");
+                return Results.BadRequest("Only author can edit message");
 
             await db.ExecuteAsync(
                 @"UPDATE message SET content = @content, file_path = @filePath
                   WHERE id = @messageId",
-                new { messageId, content = req.Content, filePath = req.FilePath });
+                new { messageId, content = req.content, filePath = req.file_path });
 
             await loggedApi.LogAction(userId, $"Edited message {messageId} in chat {chatId}");
 
@@ -208,7 +210,7 @@ public static class ChatApi
                 return Results.NotFound("Message not found");
 
             if ((long)messageInfo.author_id != userId)
-                return Results.Forbidden("Only author can delete message");
+                return Results.BadRequest("Only author can delete message");
 
             await db.ExecuteAsync(
                 @"DELETE FROM message WHERE id = @messageId",
@@ -246,27 +248,37 @@ public static class ChatApi
         }
     }
 
-    public record ChatSummary(
-        long Id,
-        string ChatWithNick,
-        long ChatWithId,
-        string? ChatWithAvatar,
-        DateTime ChatCreatedAt,
-        string? LastMessage,
-        DateTime? LastMessageTime,
-        int UnreadCount
-    );
+    public class ChatSummary
+    {
+        public long id { get; set; }
+        public string chat_with_nick { get; set; } = string.Empty;
+        public long chat_with_id { get; set; }
+        public string? chat_with_avatar { get; set; }
+        public DateTime chat_created_at { get; set; }
+        public string? last_message { get; set; }
+        public DateTime? last_message_time { get; set; }
+        public int unread_count { get; set; }
+    }
 
-    public record MessageDetails(
-        long Id,
-        string Content,
-        DateTime CreatedAt,
-        string AuthorNick,
-        long AuthorId,
-        string? AttachedFile
-    );
+    public class MessageDetails
+    {
+        public long id { get; set; }
+        public string content { get; set; } = string.Empty;
+        public DateTime created_at { get; set; }
+        public string author_nick { get; set; } = string.Empty;
+        public long author_id { get; set; }
+        public string? attached_file { get; set; }
+    }
 
-    public record SendMessageRequest(string Content, string? FilePath);
+    public class SendMessageRequest
+    {
+        public string content { get; set; } = string.Empty;
+        public string? file_path { get; set; }
+    }
 
-    public record UpdateMessageRequest(string Content, string? FilePath);
+    public class UpdateMessageRequest
+    {
+        public string content { get; set; } = string.Empty;
+        public string? file_path { get; set; }
+    }
 }

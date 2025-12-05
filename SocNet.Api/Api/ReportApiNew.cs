@@ -12,14 +12,15 @@ public static class ReportApi
         var loggedApi = new ReportApiLogged(config);
 
         var group = routes.MapGroup("/reports")
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithTags("Reports");
 
         group.MapPost("/user/{targetUserId:long}", async (long targetUserId, CreateReportRequest req, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -34,7 +35,7 @@ public static class ReportApi
                 @"INSERT INTO report (author_id, target_user_id, comment)
                   VALUES (@authorId, @targetUserId, @comment)
                   RETURNING id",
-                new { authorId = userId, targetUserId, comment = req.Comment });
+                new { authorId = userId, targetUserId, comment = req.comment });
 
             await loggedApi.LogAction(userId, $"Created report {reportId} on user {targetUserId}");
 
@@ -46,7 +47,7 @@ public static class ReportApi
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
-                return Results.Forbidden("User is banned");
+                return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -61,7 +62,7 @@ public static class ReportApi
                 @"INSERT INTO report (author_id, post_id, comment)
                   VALUES (@authorId, @postId, @comment)
                   RETURNING id",
-                new { authorId = userId, postId, comment = req.Comment });
+                new { authorId = userId, postId, comment = req.comment });
 
             await loggedApi.LogAction(userId, $"Created report {reportId} on post {postId}");
 
@@ -91,7 +92,8 @@ public static class ReportApi
         });
 
         var adminGroup = routes.MapGroup("/admin/reports")
-            .RequireAuthorization(policy => policy.RequireRole("Admin"));
+            .RequireAuthorization(policy => policy.RequireRole("Admin"))
+            .WithTags("Admin");
 
         adminGroup.MapGet("/", async (bool? reviewed, int page = 1, int pageSize = 50) =>
         {
@@ -153,8 +155,8 @@ public static class ReportApi
                     bannedUserId,
                     adminId,
                     reportId,
-                    endDate = req.EndDate,
-                    reason = req.Reason
+                    endDate = req.end_date,
+                    reason = req.reason
                 });
 
             await db.ExecuteAsync(
@@ -238,27 +240,36 @@ public static class ReportApi
         }
     }
 
-    public record CreateReportRequest(string Comment);
+    public class CreateReportRequest
+    {
+        public string comment { get; set; } = string.Empty;
+    }
 
-    public record CreateBanRequest(DateTime? EndDate, string Reason);
+    public class CreateBanRequest
+    {
+        public DateTime? end_date { get; set; }
+        public string reason { get; set; } = string.Empty;
+    }
 
-    public record ReportDetails(
-        long Id,
-        string? Comment,
-        bool IsReviewed,
-        DateTime CreatedAt,
-        string? AuthorNick,
-        string? TargetUserNick,
-        string? PostText
-    );
+    public class ReportDetails
+    {
+        public long id { get; set; }
+        public string? comment { get; set; }
+        public bool is_reviewed { get; set; }
+        public DateTime created_at { get; set; }
+        public string? author_nick { get; set; }
+        public string? target_user_nick { get; set; }
+        public string? post_text { get; set; }
+    }
 
-    public record BanDetails(
-        long Id,
-        DateTime StartDate,
-        DateTime? EndDate,
-        string? Reason,
-        string BannedUserNick,
-        string? AdminNick,
-        string? ReportComment
-    );
+    public class BanDetails
+    {
+        public long id { get; set; }
+        public DateTime start_date { get; set; }
+        public DateTime? end_date { get; set; }
+        public string? reason { get; set; }
+        public string banned_user_nick { get; set; } = string.Empty;
+        public string? admin_nick { get; set; }
+        public string? report_comment { get; set; }
+    }
 }

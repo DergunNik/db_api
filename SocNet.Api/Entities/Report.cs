@@ -1,12 +1,12 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Report
 {
-    public long Id { get; set; }
-    public long? AuthorId { get; set; }
-    public long? TargetUserId { get; set; }
-    public long? PostId { get; set; }
-    public string? Comment { get; set; }
-    public bool IsReviewed { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public long id { get; set; }
+    public long? author_id { get; set; }
+    public long? target_user_id { get; set; }
+    public long? post_id { get; set; }
+    public string? comment { get; set; }
+    public bool is_reviewed { get; set; }
+    public DateTime created_at { get; set; }
 }

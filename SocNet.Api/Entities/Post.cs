@@ -1,10 +1,10 @@
-﻿namespace SocNet.Api.Entities;
+namespace SocNet.Api.Entities;
 
 public class Post
 {
-    public long Id { get; set; }
-    public string? Text { get; set; }
-    public long AuthorId { get; set; }
-    public long? AnswerToId { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public long id { get; set; }
+    public string? text { get; set; }
+    public long author_id { get; set; }
+    public long? answer_to_id { get; set; }
+    public DateTime created_at { get; set; }
 }
