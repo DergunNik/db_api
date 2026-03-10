@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Text;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using SocNet.Api.Entities;
@@ -66,11 +67,18 @@ public static class AuthApi
         });
 
         
-        group.MapPost("/login", async (LoginRequest req) =>
+        group.MapPost("/login", async (LoginRequest req, IDistributedCache cache, IConfiguration configuration) =>
         {
             if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
                 return Results.BadRequest("Nick and Password required.");
-
+            
+            var blacklistKey = $"blacklist:{req.nick}"; 
+            var blockedTime = await cache.GetStringAsync(blacklistKey);
+            if (blockedTime != null)
+            {
+                return Results.BadRequest("Account blacklisted for 10 minutes. Please wait.");
+            }
+            
             using IDbConnection db = new NpgsqlConnection(_connectionString);
             var user = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
@@ -79,12 +87,43 @@ public static class AuthApi
             if (user is null)
                 return Results.NotFound("User not found");
 
-            var passwordHash = user.password_hash;
-            if (string.IsNullOrEmpty(passwordHash) || !BCrypt.Net.BCrypt.Verify(req.password, passwordHash))
-                return Results.BadRequest($"{req.password}_{passwordHash}_{user.created_at}_{user.id}");
+            bool isBadPassword = false;
+            try
+            {
+                var passwordHash = user.password_hash;
+                isBadPassword = string.IsNullOrEmpty(passwordHash) ||
+                                !BCrypt.Net.BCrypt.Verify(req.password, passwordHash);
+            }
+            catch (Exception ex)
+            {
+                await LogAction(user.id, $"EXCEPTION: {ex.Message}", db);
+                isBadPassword =  true;
+            }
+            
+            if (isBadPassword)
+            {
+                string attemptsKey = $"attempts:{req.nick}";
+                var attemptsStr = await cache.GetStringAsync(attemptsKey);
+                int attempts = attemptsStr == null ? 0 : int.Parse(attemptsStr);
+                attempts++;
+                
+                if (attempts >= 3)
+                {
+                    await cache.SetStringAsync(blacklistKey, DateTime.UtcNow.ToString(), 
+                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) });
+                    await cache.RemoveAsync(attemptsKey);
+                    return Results.BadRequest("Too many attempts. The login is blocked for 10 minutes.");
+                }
+                
+                await cache.SetStringAsync(attemptsKey, attempts.ToString(), 
+                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+                
+                return Results.BadRequest($"Wrong password. You can try {3 - attempts} times.");
+            }
 
             await LogAction(user.id, $"User logged in", db);
-
+            await cache.RemoveAsync($"attempts:{req.nick}");
+            
             var token = GenerateJwt(user);
 
             return Results.Ok(new { token });

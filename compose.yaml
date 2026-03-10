@@ -9,6 +9,7 @@
       - "8080:8080"
     depends_on:
       - postgres
+      - redis
       
   postgres:
     image: postgres:17.6
@@ -21,16 +22,11 @@
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@test.com
-      PGADMIN_DEFAULT_PASSWORD: 123456
-      PGADMIN_LISTEN_PORT: 5454
+  redis:
+    image: redis:latest
     ports:
-      - "5454:5454"
-    depends_on:
-      - postgres
+      - "6379:6379"
+    restart: always
 
 volumes:
   postgres_data:
