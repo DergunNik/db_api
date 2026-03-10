@@ -1,9 +1,9 @@
 using System.Data;
 using System.Security.Claims;
+using System.Text.Json;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
-using SocNet.Api.Entities;
 
 namespace SocNet.Api.Api;
 
@@ -11,15 +11,21 @@ public static class UserApi
 {
     public static IEndpointRouteBuilder MapUserEndpoints(this IEndpointRouteBuilder routes, IConfiguration config)
     {
-        var loggedApi = new UserApiLogged(config);
-
         var group = routes.MapGroup("/users")
             .RequireAuthorization()
             .WithTags("Users");
 
-        group.MapGet("/profile", async (ClaimsPrincipal user) =>
+        group.MapGet("/profile", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            string cacheKey = $"user:profile:{userId}";
+
+            var cachedProfile = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedProfile))
+            {
+                return Results.Ok(JsonSerializer.Deserialize<UserProfile>(cachedProfile));
+            }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var profile = await db.QueryFirstOrDefaultAsync<UserProfile>(
@@ -33,13 +39,29 @@ public static class UserApi
                   WHERE u.id = @userId",
                 new { userId });
 
-            return profile is not null ? Results.Ok(profile) : Results.NotFound();
+            if (profile is null) return Results.NotFound();
+
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(profile), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            });
+
+            return Results.Ok(profile);
         });
 
-        group.MapGet("/search", async (string query, int limit = 20) =>
+        group.MapGet("/search", async (string query, IDistributedCache cache, IConfiguration cfg, int limit = 20) =>
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 return Results.BadRequest("Search query must be at least 2 characters");
+
+            var loggedApi = new UserApiLogged(cfg, cache);
+            string cacheKey = $"user:search:{query.ToLower()}:{limit}";
+
+            var cachedSearch = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedSearch))
+            {
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<UserSearchResult>>(cachedSearch));
+            }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var users = await db.QueryAsync<UserSearchResult>(
@@ -51,11 +73,17 @@ public static class UserApi
                   LIMIT @limit",
                 new { query = $"%{query}%", limit });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(users), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2)
+            });
+
             return Results.Ok(users);
         });
 
-        group.MapPut("/profile", async (UpdateProfileRequest req, ClaimsPrincipal user) =>
+        group.MapPut("/profile", async (UpdateProfileRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -66,8 +94,7 @@ public static class UserApi
                     @"SELECT id FROM ""user"" WHERE nick = @nick AND id != @userId",
                     new { nick = req.nick, userId });
 
-                if (existing.HasValue)
-                    return Results.Conflict("Nick already taken");
+                if (existing.HasValue) return Results.Conflict("Nick already taken");
             }
 
             var updateFields = new List<string>();
@@ -91,14 +118,24 @@ public static class UserApi
                 var sql = $"UPDATE \"user\" SET {string.Join(", ", updateFields)} WHERE id = @userId";
                 await db.ExecuteAsync(sql, parameters);
 
+                await cache.RemoveAsync($"user:profile:{userId}");
                 await loggedApi.LogAction(userId, "Profile updated");
             }
 
             return Results.Ok();
         });
 
-        group.MapGet("/{userId:long}/followers", async (long userId, int page = 1, int pageSize = 20) =>
+        group.MapGet("/{userId:long}/followers", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
+            string cacheKey = $"user:followers:{userId}:p:{page}";
+
+            var cachedFollowers = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedFollowers))
+            {
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<UserSummary>>(cachedFollowers));
+            }
+
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var followers = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
@@ -110,11 +147,25 @@ public static class UserApi
                   LIMIT @pageSize OFFSET @offset",
                 new { userId, pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(followers), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+
             return Results.Ok(followers);
         });
 
-        group.MapGet("/{userId:long}/following", async (long userId, int page = 1, int pageSize = 20) =>
+        group.MapGet("/{userId:long}/following", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
+            string cacheKey = $"user:following:{userId}:p:{page}";
+
+            var cachedFollowing = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedFollowing))
+            {
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<UserSummary>>(cachedFollowing));
+            }
+
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var following = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
@@ -126,6 +177,11 @@ public static class UserApi
                   LIMIT @pageSize OFFSET @offset",
                 new { userId, pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(following), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+
             return Results.Ok(following);
         });
 
@@ -133,8 +189,17 @@ public static class UserApi
             .RequireAuthorization(policy => policy.RequireRole("Admin"))
             .WithTags("Admin");
 
-        adminGroup.MapGet("/", async (int page = 1, int pageSize = 50) =>
+        adminGroup.MapGet("/", async (IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 50) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
+            string cacheKey = $"admin:users:p:{page}";
+
+            var cachedUsers = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedUsers))
+            {
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<UserAdminView>>(cachedUsers));
+            }
+
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var users = await db.QueryAsync<UserAdminView>(
                 @"SELECT u.id, u.nick, u.is_admin, u.created_at,
@@ -148,11 +213,17 @@ public static class UserApi
                   LIMIT @pageSize OFFSET @offset",
                 new { pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(users), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2)
+            });
+
             return Results.Ok(users);
         });
 
-        adminGroup.MapPut("/{userId:long}/role", async (long userId, UpdateRoleRequest req, ClaimsPrincipal user) =>
+        adminGroup.MapPut("/{userId:long}/role", async (long userId, UpdateRoleRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
             var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -161,18 +232,27 @@ public static class UserApi
                 "UPDATE \"user\" SET is_admin = @isAdmin WHERE id = @userId",
                 new { userId, isAdmin = req.is_admin });
 
+            await cache.RemoveAsync($"user:profile:{userId}");
+            await cache.RemoveAsync("admin:users:p:1");
+            await loggedApi.InvalidateUserCache(userId);
+
             await loggedApi.LogAction(adminId, $"Changed user {userId} role to {(req.is_admin ? "admin" : "user")}");
 
             return Results.Ok();
         });
 
-        adminGroup.MapDelete("/{userId:long}", async (long userId, ClaimsPrincipal user) =>
+        adminGroup.MapDelete("/{userId:long}", async (long userId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new UserApiLogged(cfg, cache);
             var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             await db.ExecuteAsync("DELETE FROM \"user\" WHERE id = @userId", new { userId });
+
+            await cache.RemoveAsync($"user:profile:{userId}");
+            await cache.RemoveAsync("admin:users:p:1");
+            await loggedApi.InvalidateUserCache(userId);
 
             await loggedApi.LogAction(adminId, $"Deleted user {userId}");
 
@@ -184,16 +264,9 @@ public static class UserApi
 
     private class UserApiLogged : LoggedApi
     {
-        public string ConnectionString { get; }
-
-        public UserApiLogged(IConfiguration config) : base(config)
-        {
-            ConnectionString = config.GetConnectionString("DefaultConnection")
-                              ?? throw new Exception("Connection string not found");
-        }
+        public UserApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
     }
 
-    // DTOs
     public class UserProfile
     {
         public long id { get; set; }

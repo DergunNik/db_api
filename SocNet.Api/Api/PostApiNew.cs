@@ -1,6 +1,8 @@
 using System.Data;
 using System.Security.Claims;
+using System.Text.Json;
 using Dapper;
+using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
 using SocNet.Api.Entities;
 
@@ -10,14 +12,13 @@ public static class PostApi
 {
     public static IEndpointRouteBuilder MapPostEndpoints(this IEndpointRouteBuilder routes, IConfiguration config)
     {
-        var loggedApi = new PostApiLogged(config);
-
         var group = routes.MapGroup("/posts")
             .RequireAuthorization()
             .WithTags("Posts");
 
-        group.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal user) =>
+        group.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
@@ -37,13 +38,25 @@ public static class PostApi
                 mediaId = req.media_id
             });
 
+            await cache.RemoveAsync($"user_posts:{userId}:p:1");
+            await cache.RemoveAsync($"feed:{userId}:p:1");
+            if (req.answer_to_id.HasValue)
+                await cache.RemoveAsync($"post:{req.answer_to_id.Value}");
+
             await loggedApi.LogAction(userId, $"Created post {post.id}");
 
             return Results.Created($"/posts/{post.id}", post);
         });
 
-        group.MapGet("/{postId:long}", async (long postId) =>
+        group.MapGet("/{postId:long}", async (long postId, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
+            string cacheKey = $"post:{postId}";
+            
+            var cachedPost = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedPost))
+                return Results.Ok(JsonSerializer.Deserialize<object>(cachedPost));
+
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var post = await db.QueryFirstOrDefaultAsync<PostDetails>(
@@ -60,8 +73,7 @@ public static class PostApi
                   WHERE p.id = @postId",
                 new { postId });
 
-            if (post is null)
-                return Results.NotFound();
+            if (post is null) return Results.NotFound();
 
             var replies = await db.QueryAsync<PostSummary>(
                 @"SELECT p.id, p.text, p.created_at,
@@ -75,12 +87,24 @@ public static class PostApi
                   ORDER BY p.created_at ASC",
                 new { postId });
 
-            return Results.Ok(new { post, replies });
+            var result = new { post, replies };
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(result), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+
+            return Results.Ok(result);
         });
 
-        group.MapGet("/feed", async (ClaimsPrincipal user, int page = 1, int pageSize = 20) =>
+        group.MapGet("/feed", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            string cacheKey = $"feed:{userId}:p:{page}";
+
+            var cachedFeed = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedFeed))
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<PostDetails>>(cachedFeed));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -101,11 +125,23 @@ public static class PostApi
                   LIMIT @pageSize OFFSET @offset",
                 new { userId, pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(posts), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2)
+            });
+
             return Results.Ok(posts);
         });
 
-        group.MapGet("/user/{userId:long}", async (long userId, int page = 1, int pageSize = 20) =>
+        group.MapGet("/user/{userId:long}", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
+            string cacheKey = $"user_posts:{userId}:p:{page}";
+
+            var cachedUserPosts = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedUserPosts))
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<PostDetails>>(cachedUserPosts));
+
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
@@ -123,11 +159,17 @@ public static class PostApi
                   LIMIT @pageSize OFFSET @offset",
                 new { userId, pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(posts), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+
             return Results.Ok(posts);
         });
 
-        group.MapPut("/{postId:long}", async (long postId, UpdatePostRequest req, ClaimsPrincipal user) =>
+        group.MapPut("/{postId:long}", async (long postId, UpdatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -136,50 +178,51 @@ public static class PostApi
                 "SELECT author_id FROM post WHERE id = @postId",
                 new { postId });
 
-            if (!authorId.HasValue)
-                return Results.NotFound();
-
-            if (authorId.Value != userId)
-                return Results.BadRequest("Only author can edit post");
+            if (!authorId.HasValue) return Results.NotFound();
+            if (authorId.Value != userId) return Results.BadRequest("Only author can edit post");
 
             await db.ExecuteAsync(
                 "UPDATE post SET text = @text, media_id = @mediaId WHERE id = @postId",
                 new { postId, text = req.text, mediaId = req.media_id });
 
-            await loggedApi.LogAction(userId, $"Edited post {postId}");
+            await cache.RemoveAsync($"post:{postId}");
+            await cache.RemoveAsync($"user_posts:{userId}:p:1");
 
+            await loggedApi.LogAction(userId, $"Edited post {postId}");
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}", async (long postId, ClaimsPrincipal user) =>
+        group.MapDelete("/{postId:long}", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            var authorId = await db.QueryFirstOrDefaultAsync<long?>(
-                "SELECT author_id FROM post WHERE id = @postId",
+            var postData = await db.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT author_id, answer_to_id FROM post WHERE id = @postId",
                 new { postId });
 
-            if (!authorId.HasValue)
-                return Results.NotFound();
-
-            if (authorId.Value != userId)
-                return Results.BadRequest("Only author can delete post");
+            if (postData == null) return Results.NotFound();
+            if ((long)postData.author_id != userId) return Results.BadRequest("Only author can delete post");
 
             await db.ExecuteAsync("DELETE FROM post WHERE id = @postId", new { postId });
 
-            await loggedApi.LogAction(userId, $"Deleted post {postId}");
+            await cache.RemoveAsync($"post:{postId}");
+            await cache.RemoveAsync($"user_posts:{userId}:p:1");
+            if (postData.answer_to_id != null)
+                await cache.RemoveAsync($"post:{(long)postData.answer_to_id}");
 
+            await loggedApi.LogAction(userId, $"Deleted post {postId}");
             return Results.Ok();
         });
 
-        group.MapPost("/{postId:long}/like", async (long postId, ClaimsPrincipal user) =>
+        group.MapPost("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            if (await loggedApi.IsUserBanned(userId))
-                return Results.BadRequest("User is banned");
+            if (await loggedApi.IsUserBanned(userId)) return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -187,21 +230,22 @@ public static class PostApi
                 "SELECT EXISTS(SELECT 1 FROM post WHERE id = @postId)",
                 new { postId });
 
-            if (!postExists)
-                return Results.NotFound("Post not found");
+            if (!postExists) return Results.NotFound("Post not found");
 
             await db.ExecuteAsync(
                 @"INSERT INTO ""like"" (post_id, user_id) VALUES (@postId, @userId)
                   ON CONFLICT (post_id, user_id) DO NOTHING",
                 new { postId, userId });
 
+            await cache.RemoveAsync($"post:{postId}");
             await loggedApi.LogAction(userId, $"Liked post {postId}");
 
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}/like", async (long postId, ClaimsPrincipal user) =>
+        group.MapDelete("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -210,13 +254,15 @@ public static class PostApi
                 @"DELETE FROM ""like"" WHERE post_id = @postId AND user_id = @userId",
                 new { postId, userId });
 
+            await cache.RemoveAsync($"post:{postId}");
             await loggedApi.LogAction(userId, $"Unliked post {postId}");
 
             return Results.Ok();
         });
 
-        group.MapPost("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user) =>
+        group.MapPost("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -225,21 +271,22 @@ public static class PostApi
                 "SELECT EXISTS(SELECT 1 FROM post WHERE id = @postId)",
                 new { postId });
 
-            if (!postExists)
-                return Results.NotFound("Post not found");
+            if (!postExists) return Results.NotFound("Post not found");
 
             await db.ExecuteAsync(
                 @"INSERT INTO favorite (user_id, post_id) VALUES (@userId, @postId)
                   ON CONFLICT (user_id, post_id) DO NOTHING",
                 new { userId, postId });
 
+            await cache.RemoveAsync($"favorites:{userId}:p:1");
             await loggedApi.LogAction(userId, $"Added post {postId} to favorites");
 
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user) =>
+        group.MapDelete("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -248,14 +295,21 @@ public static class PostApi
                 @"DELETE FROM favorite WHERE user_id = @userId AND post_id = @postId",
                 new { userId, postId });
 
+            await cache.RemoveAsync($"favorites:{userId}:p:1");
             await loggedApi.LogAction(userId, $"Removed post {postId} from favorites");
 
             return Results.Ok();
         });
 
-        group.MapGet("/favorites", async (ClaimsPrincipal user, int page = 1, int pageSize = 20) =>
+        group.MapGet("/favorites", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
         {
+            var loggedApi = new PostApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            string cacheKey = $"favorites:{userId}:p:{page}";
+
+            var cachedFavs = await cache.GetStringAsync(cacheKey);
+            if (!string.IsNullOrEmpty(cachedFavs))
+                return Results.Ok(JsonSerializer.Deserialize<IEnumerable<PostDetails>>(cachedFavs));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -277,6 +331,11 @@ public static class PostApi
                   LIMIT @pageSize OFFSET @offset",
                 new { userId, pageSize, offset = (page - 1) * pageSize });
 
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(posts), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
+
             return Results.Ok(posts);
         });
 
@@ -285,26 +344,7 @@ public static class PostApi
 
     private class PostApiLogged : LoggedApi
     {
-        public string ConnectionString { get; }
-
-        public PostApiLogged(IConfiguration config) : base(config)
-        {
-            ConnectionString = config.GetConnectionString("DefaultConnection")
-                              ?? throw new Exception("Connection string not found");
-        }
-
-        public async Task<bool> IsUserBanned(long userId)
-        {
-            using IDbConnection db = new NpgsqlConnection(ConnectionString);
-            var isBanned = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM ban
-                    WHERE banned_user_id = @userId
-                      AND (end_date IS NULL OR end_date > now())
-                  )",
-                new { userId });
-            return isBanned;
-        }
+        public PostApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
     }
 
     public class CreatePostRequest

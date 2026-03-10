@@ -1,6 +1,8 @@
 using System.Data;
 using System.Security.Claims;
+using System.Text.Json;
 using Dapper;
+using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
 
 namespace SocNet.Api.Api;
@@ -9,14 +11,13 @@ public static class SubscriptionApi
 {
     public static IEndpointRouteBuilder MapSubscriptionEndpoints(this IEndpointRouteBuilder routes, IConfiguration config)
     {
-        var loggedApi = new SubscriptionApiLogged(config);
-
         var group = routes.MapGroup("/subscriptions")
             .RequireAuthorization()
             .WithTags("Subs");
 
-        group.MapPost("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user) =>
+        group.MapPost("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new SubscriptionApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (userId == targetUserId)
@@ -27,26 +28,21 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            var targetExists = await db.QueryFirstOrDefaultAsync<bool>(
-                "SELECT EXISTS(SELECT 1 FROM \"user\" WHERE id = @targetUserId)",
-                new { targetUserId });
-
-            if (!targetExists)
-                return Results.NotFound("Target user not found");
-
             await db.ExecuteAsync(
                 @"INSERT INTO subscription (user_from_id, user_to_id)
                   VALUES (@userId, @targetUserId)
                   ON CONFLICT (user_from_id, user_to_id) DO NOTHING",
                 new { userId, targetUserId });
 
-            await loggedApi.LogAction(userId, $"Subscribed to user {targetUserId}");
+            await InvalidateSubscriptionCache(cache, userId, targetUserId);
 
+            await loggedApi.LogAction(userId, $"Subscribed to user {targetUserId}");
             return Results.Ok();
         });
 
-        group.MapDelete("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user) =>
+        group.MapDelete("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new SubscriptionApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -56,38 +52,54 @@ public static class SubscriptionApi
                   WHERE user_from_id = @userId AND user_to_id = @targetUserId",
                 new { userId, targetUserId });
 
-            await loggedApi.LogAction(userId, $"Unsubscribed from user {targetUserId}");
+            await InvalidateSubscriptionCache(cache, userId, targetUserId);
 
+            await loggedApi.LogAction(userId, $"Unsubscribed from user {targetUserId}");
             return Results.Ok();
         });
 
-        group.MapGet("/{targetUserId:long}/status", async (long targetUserId, ClaimsPrincipal user) =>
+        group.MapGet("/{targetUserId:long}/status", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new SubscriptionApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            string cacheKey = $"sub:status:{userId}:{targetUserId}";
+
+            var cachedStatus = await cache.GetStringAsync(cacheKey);
+            if (cachedStatus != null) return Results.Ok(new { isSubscribed = bool.Parse(cachedStatus) });
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
-
             var isSubscribed = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM subscription
-                    WHERE user_from_id = @userId AND user_to_id = @targetUserId
-                )",
+                @"SELECT EXISTS(SELECT 1 FROM subscription WHERE user_from_id = @userId AND user_to_id = @targetUserId)",
                 new { userId, targetUserId });
+
+            await cache.SetStringAsync(cacheKey, isSubscribed.ToString(), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            });
 
             return Results.Ok(new { isSubscribed });
         });
 
-        group.MapGet("/counts", async (ClaimsPrincipal user) =>
+        group.MapGet("/counts", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
         {
+            var loggedApi = new SubscriptionApiLogged(cfg, cache);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            string cacheKey = $"sub:counts:{userId}";
+
+            var cachedCounts = await cache.GetStringAsync(cacheKey);
+            if (cachedCounts != null) return Results.Ok(JsonSerializer.Deserialize<SubscriptionCounts>(cachedCounts));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
-
             var counts = await db.QueryFirstAsync<SubscriptionCounts>(
                 @"SELECT
                     (SELECT COUNT(*) FROM subscription WHERE user_to_id = @userId) as followers_count,
                     (SELECT COUNT(*) FROM subscription WHERE user_from_id = @userId) as following_count",
                 new { userId });
+
+            await cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(counts), new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5)
+            });
 
             return Results.Ok(counts);
         });
@@ -95,28 +107,19 @@ public static class SubscriptionApi
         return routes;
     }
 
+    private static async Task InvalidateSubscriptionCache(IDistributedCache cache, long userId, long targetUserId)
+    {
+        await cache.RemoveAsync($"sub:counts:{userId}");
+        await cache.RemoveAsync($"sub:counts:{targetUserId}");
+        
+        await cache.RemoveAsync($"sub:status:{userId}:{targetUserId}");
+        
+        await cache.RemoveAsync($"feed:{userId}:p:1");
+    }
+
     private class SubscriptionApiLogged : LoggedApi
     {
-        public string ConnectionString { get; }
-
-        public SubscriptionApiLogged(IConfiguration config) : base(config)
-        {
-            ConnectionString = config.GetConnectionString("DefaultConnection")
-                              ?? throw new Exception("Connection string not found");
-        }
-
-        public async Task<bool> IsUserBanned(long userId)
-        {
-            using IDbConnection db = new NpgsqlConnection(ConnectionString);
-            var isBanned = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM ban
-                    WHERE banned_user_id = @userId
-                      AND (end_date IS NULL OR end_date > now())
-                  )",
-                new { userId });
-            return isBanned;
-        }
+        public SubscriptionApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
     }
 
     public class SubscriptionCounts
