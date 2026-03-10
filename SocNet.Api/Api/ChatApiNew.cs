@@ -18,7 +18,6 @@ public static class ChatApi
         group.MapGet("/", async (ClaimsPrincipal user, int page = 1, int pageSize = 20) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var chats = await db.QueryAsync<ChatSummary>(
@@ -48,12 +47,8 @@ public static class ChatApi
         group.MapPut("/with/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-            if (userId == targetUserId)
-                return Results.BadRequest("Cannot create chat with yourself");
-
-            if (await loggedApi.IsUserBanned(userId))
-                return Results.BadRequest("User is banned");
+            if (userId == targetUserId) return Results.BadRequest("Cannot create chat with yourself");
+            if (await loggedApi.IsUserBanned(userId)) return Results.BadRequest("User is banned");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -61,8 +56,7 @@ public static class ChatApi
                 "SELECT EXISTS(SELECT 1 FROM \"user\" WHERE id = @targetUserId)",
                 new { targetUserId });
 
-            if (!targetExists)
-                return Results.NotFound("Target user not found");
+            if (!targetExists) return Results.NotFound("Target user not found");
 
             var existingChat = await db.QueryFirstOrDefaultAsync<long?>(
                 @"SELECT id FROM chat
@@ -70,46 +64,36 @@ public static class ChatApi
                      OR (first_user_id = @targetUserId AND second_user_id = @userId)",
                 new { userId, targetUserId });
 
-            if (existingChat.HasValue)
-                return Results.Ok(new { chatId = existingChat.Value });
+            if (existingChat.HasValue) return Results.Ok(new { chatId = existingChat.Value });
 
             var chatId = await db.QueryFirstAsync<long>(
                 @"INSERT INTO chat (first_user_id, second_user_id)
                   VALUES (@firstUserId, @secondUserId)
                   RETURNING id",
-                new
-                {
-                    firstUserId = Math.Min(userId, targetUserId),
-                    secondUserId = Math.Max(userId, targetUserId)
-                });
+                new { firstUserId = Math.Min(userId, targetUserId), secondUserId = Math.Max(userId, targetUserId) });
 
             await loggedApi.LogAction(userId, $"Created chat with user {targetUserId}");
-
             return Results.Created($"/chats/{chatId}", new { chatId });
         });
 
         group.MapGet("/{chatId:long}/messages", async (long chatId, ClaimsPrincipal user, int page = 1, int pageSize = 50) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var hasAccess = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM chat
-                    WHERE id = @chatId AND (first_user_id = @userId OR second_user_id = @userId)
-                )",
+                @"SELECT EXISTS(SELECT 1 FROM chat WHERE id = @chatId AND (first_user_id = @userId OR second_user_id = @userId))",
                 new { chatId, userId });
 
-            if (!hasAccess)
-                return Results.BadRequest("No access to this chat");
+            if (!hasAccess) return Results.BadRequest("No access to this chat");
 
             var messages = await db.QueryAsync<MessageDetails>(
                 @"SELECT m.id, m.content, m.created_at,
                          u.nick as author_nick, u.id as author_id,
-                         m.file_path as attached_file
+                         med.file_path as attached_file
                   FROM message m
                   JOIN ""user"" u ON m.author_id = u.id
+                  LEFT JOIN media med ON m.media_id = med.id
                   WHERE m.chat_id = @chatId
                   ORDER BY m.created_at DESC
                   LIMIT @pageSize OFFSET @offset",
@@ -127,97 +111,69 @@ public static class ChatApi
         group.MapPost("/{chatId:long}/messages", async (long chatId, SendMessageRequest req, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-            if (await loggedApi.IsUserBanned(userId))
-                return Results.BadRequest("User is banned");
-
-            if (string.IsNullOrWhiteSpace(req.content))
-                return Results.BadRequest("Message content cannot be empty");
+            if (await loggedApi.IsUserBanned(userId)) return Results.BadRequest("User is banned");
+            if (string.IsNullOrWhiteSpace(req.content)) return Results.BadRequest("Message content cannot be empty");
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var hasAccess = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM chat
-                    WHERE id = @chatId AND (first_user_id = @userId OR second_user_id = @userId)
-                )",
+                @"SELECT EXISTS(SELECT 1 FROM chat WHERE id = @chatId AND (first_user_id = @userId OR second_user_id = @userId))",
                 new { chatId, userId });
 
-            if (!hasAccess)
-                return Results.BadRequest("No access to this chat");
+            if (!hasAccess) return Results.BadRequest("No access to this chat");
 
             var message = await db.QueryFirstAsync<MessageDetails>(
-                @"INSERT INTO message (author_id, chat_id, content, file_path)
-                  VALUES (@authorId, @chatId, @content, @filePath)
-                  RETURNING *",
-                new
-                {
-                    authorId = userId,
-                    chatId,
-                    content = req.content,
-                    filePath = req.file_path
-                });
-
-            var authorInfo = await db.QueryFirstAsync<dynamic>(
-                @"SELECT nick, id FROM ""user"" WHERE id = @userId",
-                new { userId });
-
-            message.author_nick = authorInfo.nick;
-            message.author_id = authorInfo.id;
+                @"WITH inserted AS (
+                    INSERT INTO message (author_id, chat_id, content, media_id)
+                    VALUES (@authorId, @chatId, @content, @mediaId)
+                    RETURNING *
+                  )
+                  SELECT i.id, i.content, i.created_at, u.nick as author_nick, u.id as author_id, m.file_path as attached_file
+                  FROM inserted i
+                  JOIN ""user"" u ON i.author_id = u.id
+                  LEFT JOIN media m ON i.media_id = m.id",
+                new { authorId = userId, chatId, content = req.content, mediaId = req.media_id });
 
             await loggedApi.LogAction(userId, $"Sent message in chat {chatId}");
-
             return Results.Created($"/chats/{chatId}/messages/{message.id}", message);
         });
 
         group.MapPut("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, UpdateMessageRequest req, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var messageInfo = await db.QueryFirstOrDefaultAsync<dynamic>(
                 @"SELECT author_id FROM message WHERE id = @messageId AND chat_id = @chatId",
                 new { messageId, chatId });
 
-            if (messageInfo == null)
-                return Results.NotFound("Message not found");
-
-            if ((long)messageInfo.author_id != userId)
-                return Results.BadRequest("Only author can edit message");
+            if (messageInfo == null) return Results.NotFound("Message not found");
+            if ((long)messageInfo.author_id != userId) return Results.BadRequest("Only author can edit message");
 
             await db.ExecuteAsync(
-                @"UPDATE message SET content = @content, file_path = @filePath
+                @"UPDATE message SET content = @content, media_id = @mediaId
                   WHERE id = @messageId",
-                new { messageId, content = req.content, filePath = req.file_path });
+                new { messageId, content = req.content, mediaId = req.media_id });
 
             await loggedApi.LogAction(userId, $"Edited message {messageId} in chat {chatId}");
-
             return Results.Ok();
         });
 
         group.MapDelete("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, ClaimsPrincipal user) =>
         {
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             var messageInfo = await db.QueryFirstOrDefaultAsync<dynamic>(
                 @"SELECT author_id FROM message WHERE id = @messageId AND chat_id = @chatId",
                 new { messageId, chatId });
 
-            if (messageInfo == null)
-                return Results.NotFound("Message not found");
+            if (messageInfo == null) return Results.NotFound("Message not found");
+            if ((long)messageInfo.author_id != userId) return Results.BadRequest("Only author can delete message");
 
-            if ((long)messageInfo.author_id != userId)
-                return Results.BadRequest("Only author can delete message");
-
-            await db.ExecuteAsync(
-                @"DELETE FROM message WHERE id = @messageId",
-                new { messageId });
+            await db.ExecuteAsync("DELETE FROM message WHERE id = @messageId", new { messageId });
 
             await loggedApi.LogAction(userId, $"Deleted message {messageId} in chat {chatId}");
-
             return Results.Ok();
         });
 
@@ -227,24 +183,16 @@ public static class ChatApi
     private class ChatApiLogged : LoggedApi
     {
         public string ConnectionString { get; }
-
         public ChatApiLogged(IConfiguration config) : base(config)
         {
-            ConnectionString = config.GetConnectionString("DefaultConnection")
-                              ?? throw new Exception("Connection string not found");
+            ConnectionString = config.GetConnectionString("DefaultConnection") ?? throw new Exception("Connection string not found");
         }
-
         public async Task<bool> IsUserBanned(long userId)
         {
             using IDbConnection db = new NpgsqlConnection(ConnectionString);
-            var isBanned = await db.QueryFirstOrDefaultAsync<bool>(
-                @"SELECT EXISTS(
-                    SELECT 1 FROM ban
-                    WHERE banned_user_id = @userId
-                      AND (end_date IS NULL OR end_date > now())
-                  )",
+            return await db.QueryFirstOrDefaultAsync<bool>(
+                @"SELECT EXISTS(SELECT 1 FROM ban WHERE banned_user_id = @userId AND (end_date IS NULL OR end_date > now()))",
                 new { userId });
-            return isBanned;
         }
     }
 
@@ -267,18 +215,18 @@ public static class ChatApi
         public DateTime created_at { get; set; }
         public string author_nick { get; set; } = string.Empty;
         public long author_id { get; set; }
-        public string? attached_file { get; set; }
+        public string? attached_file { get; set; } 
     }
 
     public class SendMessageRequest
     {
         public string content { get; set; } = string.Empty;
-        public string? file_path { get; set; }
+        public long? media_id { get; set; } 
     }
 
     public class UpdateMessageRequest
     {
         public string content { get; set; } = string.Empty;
-        public string? file_path { get; set; }
+        public long? media_id { get; set; } 
     }
 }

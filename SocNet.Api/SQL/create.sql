@@ -32,6 +32,7 @@ CREATE TABLE post (
                       text TEXT,
                       author_id BIGINT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
                       answer_to_id BIGINT REFERENCES post(id) ON DELETE SET NULL,
+                      media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
                       created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -70,9 +71,9 @@ CREATE TABLE message (
                          id BIGSERIAL PRIMARY KEY,
                          author_id BIGINT REFERENCES "user"(id) ON DELETE SET NULL,
                          chat_id BIGINT NOT NULL REFERENCES chat(id) ON DELETE CASCADE,
+                         media_id BIGINT REFERENCES media(id) ON DELETE SET NULL,
                          created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-                         content TEXT NOT NULL,
-                         file_path TEXT
+                         content TEXT NOT NULL
 );
 
 CREATE TABLE chat_read_status (

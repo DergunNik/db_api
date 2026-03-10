@@ -58,16 +58,12 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// builder.Services.ConfigureHttpJsonOptions(options =>
-// {
-//     options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
-// });
-
-
 var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseStaticFiles(); 
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -80,9 +76,3 @@ app.MapChatEndpoints(configuration);
 app.MapReportEndpoints(configuration);
 
 app.Run();
-
-// [JsonSerializable(typeof(AuthApi.RegisterRequest))]
-// [JsonSerializable(typeof(AuthApi.LoginRequest))]
-// public partial class AppJsonSerializerContext : JsonSerializerContext
-// {
-// }

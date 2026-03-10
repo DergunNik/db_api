@@ -25,15 +25,16 @@ public static class PostApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            var sql = @"INSERT INTO post (text, author_id, answer_to_id)
-                       VALUES (@text, @authorId, @answerToId)
+            var sql = @"INSERT INTO post (text, author_id, answer_to_id, media_id)
+                       VALUES (@text, @authorId, @answerToId, @mediaId)
                        RETURNING *";
 
             var post = await db.QueryFirstAsync<Post>(sql, new
             {
                 text = req.text,
                 authorId = userId,
-                answerToId = req.answer_to_id
+                answerToId = req.answer_to_id,
+                mediaId = req.media_id
             });
 
             await loggedApi.LogAction(userId, $"Created post {post.id}");
@@ -48,12 +49,14 @@ public static class PostApi
             var post = await db.QueryFirstOrDefaultAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
-                         m.file_path as author_avatar,
+                         am.file_path as author_avatar,
+                         pm.file_path as post_media,
                          (SELECT COUNT(*) FROM ""like"" WHERE post_id = p.id) as likes_count,
                          (SELECT COUNT(*) FROM post WHERE answer_to_id = p.id) as replies_count
                   FROM post p
                   JOIN ""user"" u ON p.author_id = u.id
-                  LEFT JOIN media m ON u.avatar_id = m.id
+                  LEFT JOIN media am ON u.avatar_id = am.id
+                  LEFT JOIN media pm ON p.media_id = pm.id
                   WHERE p.id = @postId",
                 new { postId });
 
@@ -63,9 +66,11 @@ public static class PostApi
             var replies = await db.QueryAsync<PostSummary>(
                 @"SELECT p.id, p.text, p.created_at,
                          u.nick as author_nick,
+                         pm.file_path as post_media,
                          (SELECT COUNT(*) FROM ""like"" WHERE post_id = p.id) as likes_count
                   FROM post p
                   JOIN ""user"" u ON p.author_id = u.id
+                  LEFT JOIN media pm ON p.media_id = pm.id
                   WHERE p.answer_to_id = @postId
                   ORDER BY p.created_at ASC",
                 new { postId });
@@ -82,12 +87,14 @@ public static class PostApi
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT DISTINCT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
-                         m.file_path as author_avatar,
+                         am.file_path as author_avatar,
+                         pm.file_path as post_media,
                          (SELECT COUNT(*) FROM ""like"" WHERE post_id = p.id) as likes_count,
                          (SELECT COUNT(*) FROM post WHERE answer_to_id = p.id) as replies_count
                   FROM post p
                   JOIN ""user"" u ON p.author_id = u.id
-                  LEFT JOIN media m ON u.avatar_id = m.id
+                  LEFT JOIN media am ON u.avatar_id = am.id
+                  LEFT JOIN media pm ON p.media_id = pm.id
                   JOIN subscription s ON p.author_id = s.user_to_id
                   WHERE s.user_from_id = @userId
                   ORDER BY p.created_at DESC
@@ -103,12 +110,14 @@ public static class PostApi
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
-                         m.file_path as author_avatar,
+                         am.file_path as author_avatar,
+                         pm.file_path as post_media,
                          (SELECT COUNT(*) FROM ""like"" WHERE post_id = p.id) as likes_count,
                          (SELECT COUNT(*) FROM post WHERE answer_to_id = p.id) as replies_count
                   FROM post p
                   JOIN ""user"" u ON p.author_id = u.id
-                  LEFT JOIN media m ON u.avatar_id = m.id
+                  LEFT JOIN media am ON u.avatar_id = am.id
+                  LEFT JOIN media pm ON p.media_id = pm.id
                   WHERE p.author_id = @userId
                   ORDER BY p.created_at DESC
                   LIMIT @pageSize OFFSET @offset",
@@ -134,8 +143,8 @@ public static class PostApi
                 return Results.BadRequest("Only author can edit post");
 
             await db.ExecuteAsync(
-                "UPDATE post SET text = @text WHERE id = @postId",
-                new { postId, text = req.text });
+                "UPDATE post SET text = @text, media_id = @mediaId WHERE id = @postId",
+                new { postId, text = req.text, mediaId = req.media_id });
 
             await loggedApi.LogAction(userId, $"Edited post {postId}");
 
@@ -253,14 +262,16 @@ public static class PostApi
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
-                         m.file_path as author_avatar,
+                         am.file_path as author_avatar,
+                         pm.file_path as post_media,
                          (SELECT COUNT(*) FROM ""like"" WHERE post_id = p.id) as likes_count,
                          (SELECT COUNT(*) FROM post WHERE answer_to_id = p.id) as replies_count,
                          f.created_at as favorited_at
                   FROM favorite f
                   JOIN post p ON f.post_id = p.id
                   JOIN ""user"" u ON p.author_id = u.id
-                  LEFT JOIN media m ON u.avatar_id = m.id
+                  LEFT JOIN media am ON u.avatar_id = am.id
+                  LEFT JOIN media pm ON p.media_id = pm.id
                   WHERE f.user_id = @userId
                   ORDER BY f.created_at DESC
                   LIMIT @pageSize OFFSET @offset",
@@ -300,11 +311,13 @@ public static class PostApi
     {
         public string text { get; set; } = string.Empty;
         public long? answer_to_id { get; set; }
+        public long? media_id { get; set; }
     }
 
     public class UpdatePostRequest
     {
         public string text { get; set; } = string.Empty;
+        public long? media_id { get; set; }
     }
 
     public class PostDetails
@@ -316,6 +329,7 @@ public static class PostApi
         public string author_nick { get; set; } = string.Empty;
         public long author_id { get; set; }
         public string? author_avatar { get; set; }
+        public string? post_media { get; set; }
         public int likes_count { get; set; }
         public int replies_count { get; set; }
     }
@@ -326,6 +340,7 @@ public static class PostApi
         public string? text { get; set; }
         public DateTime created_at { get; set; }
         public string author_nick { get; set; } = string.Empty;
+        public string? post_media { get; set; }
         public int likes_count { get; set; }
     }
 }

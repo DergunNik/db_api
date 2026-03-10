@@ -5,35 +5,34 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="27065d74-acc4-46c0-9d11-647975b18870" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/admin-1.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/chat-1.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/post-1.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/post-2.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/user-1.jpg" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/SocNet.Api/wwwroot/uploads/user-2.jpg" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/2371e254-53cb-4498-811c-17d7a5be6405.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources/2371e254-53cb-4498-811c-17d7a5be6405.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/2371e254-53cb-4498-811c-17d7a5be6405/storage_v2/_src_/database/socnet.tiqIyg/schema/public.abK9xQ.meta" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources/2371e254-53cb-4498-811c-17d7a5be6405/storage_v2/_src_/database/socnet.tiqIyg/schema/public.abK9xQ.meta" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/aa642a4b-0acd-469b-a366-2723edf7757c.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/aa642a4b-0acd-469b-a366-2723edf7757c/storage_v2/_src_/database/postgres.edMnLQ.meta" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/aa642a4b-0acd-469b-a366-2723edf7757c/storage_v2/_src_/database/postgres.edMnLQ/schema/information_schema.FNRwLQ.meta" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/aa642a4b-0acd-469b-a366-2723edf7757c/storage_v2/_src_/database/postgres.edMnLQ/schema/pg_catalog.0S1ZNQ.meta" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources/aa642a4b-0acd-469b-a366-2723edf7757c/storage_v2/_src_/database/postgres.edMnLQ/schema/public.abK9xQ.meta" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/data_source_mapping.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/ChatApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/ChatApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/LoggedApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/LoggedApi.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/PostApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/PostApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Ban.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Ban.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Chat.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Chat.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Favorite.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Favorite.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Like.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Like.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Log.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Log.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Media.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Media.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Message.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Message.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Post.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Post.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Report.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Report.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/Subscription.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/Subscription.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Entities/User.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Entities/User.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Program.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/SQL/create.sql" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/SQL/create.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/SocNet.Api.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/SocNet.Api.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfo.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfo.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfoInputs.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.AssemblyInfoInputs.cache" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.assets.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net9.0/SocNet.Api.assets.cache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/SQL/test_data.sql" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/SQL/test_data.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.AssemblyInfo.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.AssemblyInfo.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.AssemblyInfoInputs.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.AssemblyInfoInputs.cache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.GeneratedMSBuildEditorConfig.editorconfig" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.GlobalUsings.g.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.GlobalUsings.g.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.assets.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/Debug/net8.0/SocNet.Api.assets.cache" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.dgspec.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.dgspec.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.props" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.props" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.targets" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/SocNet.Api.csproj.nuget.g.targets" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.assets.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.assets.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.nuget.cache" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.nuget.cache" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/SocNet.Api/obj/project.packagespec.json" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/obj/project.packagespec.json" afterDir="false" />
@@ -49,9 +48,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 0
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
   <component name="ProjectId" id="36On4roNxAdGYCO01oVIhYUJeJS" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -65,9 +64,9 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
+    "git-widget-placeholder": "sem2",
     "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/Projects/C#/SocNet - Copy"
+    "last_opened_file_path": "C:/Projects/C#/db_group_lab_work/db_api"
   },
   "keyToStringList": {
     "DatabaseDriversLRU": [

@@ -28,14 +28,14 @@ INSERT INTO "user" (nick, password_hash, is_admin, created_at) VALUES
 
 -- Создание медиа-файлов
 INSERT INTO media (file_path) VALUES
-('/uploads/avatar_admin.jpg'),
-('/uploads/avatar_alice.jpg'),
-('/uploads/avatar_bob.jpg'),
-('/uploads/avatar_charlie.jpg'),
-('/uploads/avatar_diana.jpg'),
-('/uploads/post_image_1.jpg'),
-('/uploads/post_image_2.jpg'),
-('/uploads/chat_file_1.pdf');
+('/uploads/admin-1.jpg'), -- ID 1
+('/uploads/user-1.jpg'),  -- ID 2
+('/uploads/user-2.jpg'),  -- ID 3
+('/uploads/user-1.jpg'),  -- ID 4
+('/uploads/user-2.jpg'),  -- ID 5
+('/uploads/post-1.jpg'),  -- ID 6
+('/uploads/post-2.jpg'),  -- ID 7
+('/uploads/chat-1.png');  -- ID 8
 
 -- Обновление аватаров пользователей
 UPDATE "user" SET avatar_id = 1 WHERE nick = 'admin';
@@ -57,6 +57,10 @@ INSERT INTO post (text, author_id, created_at) VALUES
 -- Установка связей между постами (ответы)
 UPDATE post SET answer_to_id = 1 WHERE id = 6;
 UPDATE post SET answer_to_id = 1 WHERE id = 7;
+
+-- Добавление изображений
+UPDATE post SET media_id = 6 WHERE id = 4;
+UPDATE post SET media_id = 7 WHERE id = 5;
 
 -- Добавление лайков
 INSERT INTO "like" (post_id, user_id, created_at) VALUES
@@ -105,7 +109,7 @@ INSERT INTO message (author_id, chat_id, content, created_at) VALUES
 (5, 3, 'Тоже хорошо. Давай пообщаемся о технологиях.', '2025-01-05 22:45:00+00');
 
 -- Добавление файла к сообщению
-UPDATE message SET file_path = '/uploads/chat_file_1.pdf' WHERE id = 11;
+UPDATE message SET media_id = 8 WHERE id = 11;
 
 -- Статус чтения сообщений
 INSERT INTO chat_read_status (chat_id, user_id, read_at) VALUES

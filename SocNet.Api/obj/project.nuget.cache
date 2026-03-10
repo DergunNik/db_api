@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "wH4u3CPpDv8=",
+  "dgSpecHash": "HHrNIokWk3U=",
   "success": true,
-  "projectFilePath": "C:\\Projects\\C#\\SocNet - Copy\\SocNet.Api\\SocNet.Api.csproj",
+  "projectFilePath": "C:\\Projects\\C#\\db_group_lab_work\\db_api\\SocNet.Api\\SocNet.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Микалай\\.nuget\\packages\\azure.core\\1.49.0\\azure.core.1.49.0.nupkg.sha512",
     "C:\\Users\\Микалай\\.nuget\\packages\\azure.identity\\1.16.0\\azure.identity.1.16.0.nupkg.sha512",
