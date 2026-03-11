@@ -1,16 +1,27 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using SocNet.Api.Api;
+using SocNet.Api.Background;
 using SocNet.Api.Mongo;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
+
+builder.Services.AddMemoryCache();
+builder.Services.AddHostedService<SessionInvalidationBackgroundService>();
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = configuration.GetConnectionString("Redis");
     options.InstanceName = "SocNet:";
 });
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp => 
+    ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis"))
+);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -60,6 +71,37 @@ builder.Services.AddAuthentication(options =>
             ValidateLifetime = true,
             ValidateIssuer = false,
             ValidateAudience = false
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var distributedCache = context.HttpContext.RequestServices.GetRequiredService<IDistributedCache>();
+                var memoryCache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
+                
+                var userId = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var jti = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+
+                if (userId != null && jti != null)
+                {
+                    var sessionKey = $"session:{userId}:{jti}";
+
+                    if (!memoryCache.TryGetValue(sessionKey, out string? sessionActive))
+                    {
+                        sessionActive = await distributedCache.GetStringAsync(sessionKey);
+
+                        if (!string.IsNullOrEmpty(sessionActive))
+                        {
+                            memoryCache.Set(sessionKey, sessionActive, TimeSpan.FromMinutes(5));
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(sessionActive))
+                    {
+                        context.Fail("Session expired or revoked.");
+                    }
+                }
+            }
         };
     });
 

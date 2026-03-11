@@ -4,10 +4,12 @@ using System.Security.Claims;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using SocNet.Api.Entities;
-using SocNet.Api.Mongo; 
+using SocNet.Api.Mongo;
+using StackExchange.Redis;
 
 namespace SocNet.Api.Api;
 
@@ -33,10 +35,8 @@ public static class AuthApi
                 return Results.BadRequest("Nick and Password required.");
 
             var hash = BCrypt.Net.BCrypt.HashPassword(req.password);
-
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(null, $"SELECT user by nick: {req.nick}");
             var existing = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
                 new { nick = req.nick });
@@ -45,12 +45,9 @@ public static class AuthApi
                 return Results.Conflict("User already exists.");
 
             var insertSql = "INSERT INTO \"user\"(nick, password_hash, created_at) VALUES (@nick, @hash, now()) RETURNING id;";
-            
-            await loggedApi.LogDbQuery(null, $"INSERT new user with nick {req.nick}");
             var newId = await db.ExecuteScalarAsync<long>(insertSql, new { nick = req.nick, hash });
 
-            await loggedApi.LogAction(newId, $"User registered with nick: {req.nick}");
-
+            await loggedApi.LogAction(newId, $"User registered: {req.nick}");
             return Results.Created();
         });
 
@@ -58,78 +55,89 @@ public static class AuthApi
         {
             var loggedApi = new AuthApiLogged(cfg, cache, logService);
 
-            if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
-                return Results.BadRequest("Nick and Password required.");
-            
             var blacklistKey = $"blacklist:{req.nick}"; 
-            var blockedTime = await cache.GetStringAsync(blacklistKey);
-            if (blockedTime != null)
+            if (await cache.GetStringAsync(blacklistKey) != null)
                 return Results.BadRequest("Account blacklisted for 10 minutes.");
             
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
-            
-            await loggedApi.LogDbQuery(null, $"SELECT user by nick: {req.nick}");
             var user = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
                 new { nick = req.nick });
 
-            if (user is null)
-                return Results.NotFound("User not found");
+            if (user is null) return Results.NotFound("User not found");
 
-            bool isBadPassword = false;
-            try
-            {
-                var passwordHash = user.password_hash;
-                isBadPassword = string.IsNullOrEmpty(passwordHash) ||
-                                !BCrypt.Net.BCrypt.Verify(req.password, passwordHash);
-            }
-            catch (Exception ex)
-            {
-                await loggedApi.LogException(user.id, ex);
-                isBadPassword = true;
-            }
-            
-            if (isBadPassword)
+            if (!BCrypt.Net.BCrypt.Verify(req.password, user.password_hash))
             {
                 string attemptsKey = $"attempts:{req.nick}";
                 var attemptsStr = await cache.GetStringAsync(attemptsKey);
-                int attempts = attemptsStr == null ? 0 : int.Parse(attemptsStr);
-                attempts++;
+                int attempts = (attemptsStr == null ? 0 : int.Parse(attemptsStr)) + 1;
                 
                 if (attempts >= 3)
                 {
-                    await cache.SetStringAsync(blacklistKey, DateTime.UtcNow.ToString(), 
-                        new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) });
+                    await cache.SetStringAsync(blacklistKey, "blocked", new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) });
                     await cache.RemoveAsync(attemptsKey);
-                    
-                    await loggedApi.LogAction(user.id, "Account blacklisted due to multiple failed login attempts");
-                    return Results.BadRequest("Too many attempts. Blocked for 10 minutes.");
+                    return Results.BadRequest("Blocked for 10 minutes.");
                 }
-                
-                await cache.SetStringAsync(attemptsKey, attempts.ToString(), 
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
-                
-                return Results.BadRequest($"Wrong password. Remaining attempts: {3 - attempts}");
+                await cache.SetStringAsync(attemptsKey, attempts.ToString(), new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+                return Results.BadRequest($"Wrong password. Remaining: {3 - attempts}");
             }
 
-            await loggedApi.LogAction(user.id, "User logged in");
             await cache.RemoveAsync($"attempts:{req.nick}");
-            
-            var token = GenerateJwt(user);
+
+            var (token, jti) = GenerateJwtWithJti(user);
+
+            var sessionKey = $"session:{user.id}:{jti}";
+            await cache.SetStringAsync(sessionKey, "active", new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_jwtExpiryMinutes)
+            });
+
+            await loggedApi.LogAction(user.id, "User logged in with session creation");
             return Results.Ok(new { token });
         });
+
+        group.MapPost("/logout", async (
+            ClaimsPrincipal principal, 
+            IDistributedCache cache, 
+            IMemoryCache memoryCache,
+            IConnectionMultiplexer redis,
+            IConfiguration cfg, 
+            MongoLogService logService) =>
+        {
+            var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            var jti = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+
+            if (userId != null && jti != null)
+            {
+                var sessionKey = $"session:{userId}:{jti}";
+
+                await cache.RemoveAsync(sessionKey);
+                
+                memoryCache.Remove(sessionKey);
+
+                var subscriber = redis.GetSubscriber();
+                await subscriber.PublishAsync("session-revoked", sessionKey);
+                
+                var loggedApi = new AuthApiLogged(cfg, cache, logService);
+                await loggedApi.LogAction(long.Parse(userId), "User logged out (session invalidated)");
+            }
+
+            return Results.Ok("Logged out successfully");
+        }).RequireAuthorization();
 
         return routes;
     }
 
-    private static string GenerateJwt(User user)
+    private static (string Token, string Jti) GenerateJwtWithJti(User user)
     {
+        var jti = Guid.NewGuid().ToString(); 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, jti),
             new Claim(ClaimTypes.Name, user.nick),
             new Claim(ClaimTypes.Role, user.is_admin ? "Admin" : "User")
         };
@@ -139,7 +147,7 @@ public static class AuthApi
             expires: DateTime.UtcNow.AddMinutes(_jwtExpiryMinutes),
             signingCredentials: creds);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return (new JwtSecurityTokenHandler().WriteToken(token), jti);
     }
 
     private class AuthApiLogged : LoggedApi
@@ -147,16 +155,7 @@ public static class AuthApi
         public AuthApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
             : base(config, cache, logService) { }
     }
-
-    public class RegisterRequest
-    {
-        public string nick { get; set; } = string.Empty;
-        public string password { get; set; } = string.Empty;
-    }
-
-    public class LoginRequest
-    {
-        public string nick { get; set; } = string.Empty;
-        public string password { get; set; } = string.Empty;
-    }
+    
+    public record RegisterRequest(string nick, string password);
+    public record LoginRequest(string nick, string password);
 }

@@ -1,12 +1,27 @@
 ﻿services:
-  socnet.api:
+  socnet.api-1:
     image: socnet.api
     build:
       context: .
       dockerfile: SocNet.Api/Dockerfile
     ports:
-      - "5119:5119"
       - "8080:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+    depends_on:
+      - postgres
+      - redis
+      - mongo
+
+  socnet.api-2:
+    image: socnet.api
+    build:
+      context: .
+      dockerfile: SocNet.Api/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - ASPNETCORE_URLS=http://+:8081
     depends_on:
       - postgres
       - redis
