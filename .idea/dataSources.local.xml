@@ -37,10 +37,7 @@
       <secret-storage>master_key</secret-storage>
       <schema-mapping>
         <introspection-scope>
-          <node kind="schema">
-            <name qname="@" />
-            <name qname="SocNetLogs" />
-          </node>
+          <node kind="schema" qname="SocNetLogs" />
         </introspection-scope>
       </schema-mapping>
     </data-source>

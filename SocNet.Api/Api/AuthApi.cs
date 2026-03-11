@@ -46,7 +46,7 @@ public static class AuthApi
 
             var insertSql = "INSERT INTO \"user\"(nick, password_hash, created_at) VALUES (@nick, @hash, now()) RETURNING id;";
             
-            await loggedApi.LogDbQuery(null, "INSERT new user");
+            await loggedApi.LogDbQuery(null, $"INSERT new user with nick {req.nick}");
             var newId = await db.ExecuteScalarAsync<long>(insertSql, new { nick = req.nick, hash });
 
             await loggedApi.LogAction(newId, $"User registered with nick: {req.nick}");
@@ -68,7 +68,7 @@ public static class AuthApi
             
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(null, $"Login attempt for nick: {req.nick}");
+            await loggedApi.LogDbQuery(null, $"SELECT user by nick: {req.nick}");
             var user = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
                 new { nick = req.nick });

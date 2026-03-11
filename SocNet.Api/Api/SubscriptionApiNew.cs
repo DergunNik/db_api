@@ -29,11 +29,19 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            await loggedApi.LogDbQuery(userId, $"Subscription attempt to user {targetUserId}");
+            var targetExists = await db.QueryFirstOrDefaultAsync<bool>(
+                "SELECT EXISTS(SELECT 1 FROM \"user\" WHERE id = @targetUserId)",
+                new { targetUserId }
+            );
+
+            if (!targetExists)
+                return Results.NotFound("Target user not found");
+
+            await loggedApi.LogDbQuery(userId, $"INSERT subscription attempt to user {targetUserId}");
             await db.ExecuteAsync(
                 @"INSERT INTO subscription (user_from_id, user_to_id)
-                  VALUES (@userId, @targetUserId)
-                  ON CONFLICT (user_from_id, user_to_id) DO NOTHING",
+          VALUES (@userId, @targetUserId)
+          ON CONFLICT (user_from_id, user_to_id) DO NOTHING",
                 new { userId, targetUserId });
 
             await InvalidateSubscriptionCache(cache, userId, targetUserId);
@@ -49,7 +57,7 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            await loggedApi.LogDbQuery(userId, $"Unsubscription from user {targetUserId}");
+            await loggedApi.LogDbQuery(userId, $"DELETE subscription from user {targetUserId}");
             await db.ExecuteAsync(
                 @"DELETE FROM subscription
                   WHERE user_from_id = @userId AND user_to_id = @targetUserId",
@@ -72,7 +80,7 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(userId, $"Check subscription status with {targetUserId}");
+            await loggedApi.LogDbQuery(userId, $"SELECT subscription status with {targetUserId}");
             var isSubscribed = await db.QueryFirstOrDefaultAsync<bool>(
                 @"SELECT EXISTS(SELECT 1 FROM subscription WHERE user_from_id = @userId AND user_to_id = @targetUserId)",
                 new { userId, targetUserId });
@@ -96,7 +104,7 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(userId, "Fetching subscription counts");
+            await loggedApi.LogDbQuery(userId, "SELECT subscription counts");
             var counts = await db.QueryFirstAsync<SubscriptionCounts>(
                 @"SELECT
                     (SELECT COUNT(*) FROM subscription WHERE user_to_id = @userId) as followers_count,

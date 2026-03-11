@@ -30,7 +30,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(userId, "Fetching user profile details");
+            await loggedApi.LogDbQuery(userId, "SELECT user profile details");
             var profile = await db.QueryFirstOrDefaultAsync<UserProfile>(
                 @"SELECT u.id, u.nick, u.is_admin, u.created_at,
                          m.file_path as avatar_path,
@@ -69,7 +69,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(userId, $"User search: {query}");
+            await loggedApi.LogDbQuery(userId, $"SELECT user: {query}");
             var users = await db.QueryAsync<UserSearchResult>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path
                   FROM ""user"" u
@@ -96,7 +96,7 @@ public static class UserApi
 
             if (!string.IsNullOrWhiteSpace(req.nick))
             {
-                await loggedApi.LogDbQuery(userId, "Checking nick availability");
+                await loggedApi.LogDbQuery(userId, "SELECT for checking nick availability");
                 var existing = await db.QueryFirstOrDefaultAsync<long?>(
                     @"SELECT id FROM ""user"" WHERE nick = @nick AND id != @userId",
                     new { nick = req.nick, userId });
@@ -124,7 +124,7 @@ public static class UserApi
             {
                 var sql = $"UPDATE \"user\" SET {string.Join(", ", updateFields)} WHERE id = @userId";
                 
-                await loggedApi.LogDbQuery(userId, "Executing profile update");
+                await loggedApi.LogDbQuery(userId, $"UPDATE profile with id {userId}");
                 await db.ExecuteAsync(sql, parameters);
 
                 await cache.RemoveAsync($"user:profile:{userId}");
@@ -148,7 +148,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(currentUserId, $"Fetching followers for user {userId}");
+            await loggedApi.LogDbQuery(currentUserId, $"SELECT followers for user {userId}");
             var followers = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
                   FROM subscription s
@@ -181,7 +181,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(currentUserId, $"Fetching following list for user {userId}");
+            await loggedApi.LogDbQuery(currentUserId, $"SELECT following list for user {userId}");
             var following = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
                   FROM subscription s
@@ -218,7 +218,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(adminId, "Admin fetching all users list");
+            await loggedApi.LogDbQuery(adminId, "SELECT all users list by admin");
             var users = await db.QueryAsync<UserAdminView>(
                 @"SELECT u.id, u.nick, u.is_admin, u.created_at,
                          m.file_path as avatar_path,
@@ -246,7 +246,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            await loggedApi.LogDbQuery(adminId, $"Admin updating role for user {userId}");
+            await loggedApi.LogDbQuery(adminId, $"UPDATE role for user {userId} by admin");
             await db.ExecuteAsync(
                 "UPDATE \"user\" SET is_admin = @isAdmin WHERE id = @userId",
                 new { userId, isAdmin = req.is_admin });
@@ -267,7 +267,7 @@ public static class UserApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
-            await loggedApi.LogDbQuery(adminId, $"Admin deleting user {userId}");
+            await loggedApi.LogDbQuery(adminId, $"DELETE user {userId} by admin");
             await db.ExecuteAsync("DELETE FROM \"user\" WHERE id = @userId", new { userId });
 
             await cache.RemoveAsync($"user:profile:{userId}");

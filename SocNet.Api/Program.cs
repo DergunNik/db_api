@@ -83,5 +83,6 @@ app.MapSubscriptionEndpoints(configuration);
 app.MapChatEndpoints(configuration);
 app.MapReportEndpoints(configuration);
 app.MapLogAdminEndpoints();
+app.MapReportExportEndpoints();
 
 app.Run();

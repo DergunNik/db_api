@@ -55,7 +55,7 @@ public static class ReportApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(userId, $"Fetching details for report {reportId}");
+            await loggedApi.LogDbQuery(userId, $"SELECT details for report {reportId}");
             var report = await db.QueryFirstOrDefaultAsync<ReportDetails>(
                 @"SELECT r.*, ua.nick as author_nick, ut.nick as target_user_nick, p.text as post_text
                   FROM report r
@@ -85,7 +85,7 @@ public static class ReportApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
             
-            await loggedApi.LogDbQuery(adminId, $"Admin fetching target for ban from report {reportId}");
+            await loggedApi.LogDbQuery(adminId, $"SELECT target for ban from report by admin {reportId}");
             var report = await db.QueryFirstOrDefaultAsync<dynamic>(
                 "SELECT target_user_id FROM report WHERE id = @reportId", new { reportId });
 
