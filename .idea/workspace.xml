@@ -4,17 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="27065d74-acc4-46c0-9d11-647975b18870" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/SocNet.Api/Api/ReportExportApi.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/AuthApi.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/ReportApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/SubscriptionApiNew.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Api/UserApi.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Mongo/MongoLogService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Mongo/MongoLogService.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SocNet.Api/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/SocNet.Api/Program.cs" afterDir="false" />
-    </list>
+    <list default="true" id="27065d74-acc4-46c0-9d11-647975b18870" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

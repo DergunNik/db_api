@@ -1,0 +1,75 @@
+.form {
+  background: var(--card-bg, #24283b);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border, #333);
+}
+
+.replyLabel {
+  font-size: 0.85rem;
+  color: var(--text-dim, #565f89);
+  margin-bottom: 0.5rem;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  background: var(--input-bg, #1f2335);
+  color: var(--text, #c0caf5);
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent, #7aa2f7);
+}
+
+.error {
+  color: #f7768e;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.cancel {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--text-dim, #565f89);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cancel:hover {
+  background: var(--hover-bg, #32364a);
+}
+
+.submit {
+  padding: 0.5rem 1.25rem;
+  background: var(--accent, #7aa2f7);
+  color: #1a1b26;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.submit:hover:not(:disabled) {
+  background: #8fb4ff;
+}
+
+.submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

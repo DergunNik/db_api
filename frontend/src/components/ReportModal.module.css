@@ -1,0 +1,69 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--card-bg, #24283b);
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 420px;
+  border: 1px solid var(--border, #333);
+}
+
+.modal h3 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  background: var(--input-bg, #1f2335);
+  color: var(--text, #c0caf5);
+  font-size: 0.95rem;
+  resize: vertical;
+  margin-bottom: 1rem;
+}
+
+.error {
+  color: #f7768e;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cancel {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--text-dim, #565f89);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.submit {
+  padding: 0.5rem 1.25rem;
+  background: #f7768e;
+  color: #1a1b26;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.5;
+}
