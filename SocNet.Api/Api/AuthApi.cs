@@ -3,83 +3,72 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Dapper;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using SocNet.Api.Entities;
+using SocNet.Api.Mongo; 
 
 namespace SocNet.Api.Api;
 
 public static class AuthApi
 {
-    private static string? _connectionString;
     private static string? _jwtKey;
     private static int _jwtExpiryMinutes;
 
-    private static async Task LogAction(long? userId, string action, IDbConnection db)
-    {
-        try
-        {
-            await db.ExecuteAsync(
-                "INSERT INTO log (user_id, details) VALUES (@userId, @details)",
-                new { userId, details = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}: {action}" });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to log action: {ex.Message}");
-        }
-    }
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder routes, IConfiguration config)
     {
-        _connectionString = config.GetConnectionString("DefaultConnection")
-                            ?? throw new Exception("Connection string not found");
-        
         var jwtSection = config.GetSection("Jwt");
-        _jwtKey = jwtSection["Key"] 
-                  ?? throw new Exception("Jwt:Key missing");
+        _jwtKey = jwtSection["Key"] ?? throw new Exception("Jwt:Key missing");
         _jwtExpiryMinutes = int.TryParse(jwtSection["ExpiryMinutes"], out var m) ? m : 60;
 
         var group = routes.MapGroup("/auth")
             .WithTags("Auth");
 
-        
-        group.MapPost("/register", async (RegisterRequest req) =>
+        group.MapPost("/register", async (RegisterRequest req, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
+            var loggedApi = new AuthApiLogged(cfg, cache, logService);
+            
             if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
                 return Results.BadRequest("Nick and Password required.");
 
             var hash = BCrypt.Net.BCrypt.HashPassword(req.password);
 
-            using IDbConnection db = new NpgsqlConnection(_connectionString);
+            using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(null, $"SELECT user by nick: {req.nick}");
             var existing = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
                 new { nick = req.nick });
+            
             if (existing is not null)
                 return Results.Conflict("User already exists.");
 
             var insertSql = "INSERT INTO \"user\"(nick, password_hash, created_at) VALUES (@nick, @hash, now()) RETURNING id;";
+            
+            await loggedApi.LogDbQuery(null, "INSERT new user");
             var newId = await db.ExecuteScalarAsync<long>(insertSql, new { nick = req.nick, hash });
 
-            await LogAction(newId, $"User registered with nick: {req.nick}", db);
+            await loggedApi.LogAction(newId, $"User registered with nick: {req.nick}");
 
             return Results.Created();
         });
 
-        
-        group.MapPost("/login", async (LoginRequest req, IDistributedCache cache, IConfiguration configuration) =>
+        group.MapPost("/login", async (LoginRequest req, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
+            var loggedApi = new AuthApiLogged(cfg, cache, logService);
+
             if (string.IsNullOrWhiteSpace(req.nick) || string.IsNullOrWhiteSpace(req.password))
                 return Results.BadRequest("Nick and Password required.");
             
             var blacklistKey = $"blacklist:{req.nick}"; 
             var blockedTime = await cache.GetStringAsync(blacklistKey);
             if (blockedTime != null)
-            {
-                return Results.BadRequest("Account blacklisted for 10 minutes. Please wait.");
-            }
+                return Results.BadRequest("Account blacklisted for 10 minutes.");
             
-            using IDbConnection db = new NpgsqlConnection(_connectionString);
+            using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(null, $"Login attempt for nick: {req.nick}");
             var user = await db.QueryFirstOrDefaultAsync<User>(
                 "SELECT * FROM \"user\" WHERE nick = @nick",
                 new { nick = req.nick });
@@ -96,8 +85,8 @@ public static class AuthApi
             }
             catch (Exception ex)
             {
-                await LogAction(user.id, $"EXCEPTION: {ex.Message}", db);
-                isBadPassword =  true;
+                await loggedApi.LogException(user.id, ex);
+                isBadPassword = true;
             }
             
             if (isBadPassword)
@@ -112,27 +101,27 @@ public static class AuthApi
                     await cache.SetStringAsync(blacklistKey, DateTime.UtcNow.ToString(), 
                         new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10) });
                     await cache.RemoveAsync(attemptsKey);
-                    return Results.BadRequest("Too many attempts. The login is blocked for 10 minutes.");
+                    
+                    await loggedApi.LogAction(user.id, "Account blacklisted due to multiple failed login attempts");
+                    return Results.BadRequest("Too many attempts. Blocked for 10 minutes.");
                 }
                 
                 await cache.SetStringAsync(attemptsKey, attempts.ToString(), 
                     new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
                 
-                return Results.BadRequest($"Wrong password. You can try {3 - attempts} times.");
+                return Results.BadRequest($"Wrong password. Remaining attempts: {3 - attempts}");
             }
 
-            await LogAction(user.id, $"User logged in", db);
+            await loggedApi.LogAction(user.id, "User logged in");
             await cache.RemoveAsync($"attempts:{req.nick}");
             
             var token = GenerateJwt(user);
-
             return Results.Ok(new { token });
         });
 
         return routes;
     }
-    
-    
+
     private static string GenerateJwt(User user)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey!));
@@ -151,6 +140,12 @@ public static class AuthApi
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private class AuthApiLogged : LoggedApi
+    {
+        public AuthApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
     public class RegisterRequest

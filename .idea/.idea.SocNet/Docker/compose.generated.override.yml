@@ -2,7 +2,7 @@
 services:
   socnet.api:
     build:
-      context: "C:\\Projects\\C#\\SocNet - Copy"
+      context: "C:\\Projects\\C#\\db_group_lab_work\\db_api"
       dockerfile: "SocNet.Api/Dockerfile"
       target: "base"
     command: []
@@ -11,11 +11,12 @@ services:
     - "/app/bin/Debug/net8.0/SocNet.Api.dll"
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_STATICWEBASSETS: "/app/bin/Debug/net8.0/SocNet.Api.staticwebassets.runtime.CT.json"
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
     image: "socnet.api:dev"
     ports: []
     volumes:
-    - "C:\\Projects\\C#\\SocNet - Copy\\SocNet.Api:/app:rw"
-    - "C:\\Projects\\C#\\SocNet - Copy:/src:rw"
+    - "C:\\Projects\\C#\\db_group_lab_work\\db_api\\SocNet.Api:/app:rw"
+    - "C:\\Projects\\C#\\db_group_lab_work\\db_api:/src:rw"
     - "C:\\Users\\Микалай\\.nuget\\packages:/home/app/.nuget/packages"
     working_dir: "/app"

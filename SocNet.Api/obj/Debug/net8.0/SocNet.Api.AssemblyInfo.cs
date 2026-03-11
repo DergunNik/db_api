@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SocNet.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+260efaf3aa899ae32b47ae8e3de75bc558b786ee")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fce709493a9af2b194fcc25031a2246b62f06521")]
 [assembly: System.Reflection.AssemblyProductAttribute("SocNet.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SocNet.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

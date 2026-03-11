@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
+using SocNet.Api.Mongo;
 
 namespace SocNet.Api.Api;
 
@@ -15,9 +16,9 @@ public static class ReportApi
             .RequireAuthorization()
             .WithTags("Reports");
 
-        group.MapPost("/user/{targetUserId:long}", async (long targetUserId, CreateReportRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/user/{targetUserId:long}", async (long targetUserId, CreateReportRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ReportApiLogged(cfg, cache);
+            var loggedApi = new ReportApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
@@ -25,6 +26,7 @@ public static class ReportApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, $"Creating report on user {targetUserId}");
             var reportId = await db.QueryFirstAsync<long>(
                 @"INSERT INTO report (author_id, target_user_id, comment)
                   VALUES (@authorId, @targetUserId, @comment)
@@ -37,9 +39,9 @@ public static class ReportApi
             return Results.Created($"/reports/{reportId}", new { reportId });
         });
 
-        group.MapGet("/{reportId:long}", async (long reportId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/{reportId:long}", async (long reportId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ReportApiLogged(cfg, cache);
+            var loggedApi = new ReportApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var isAdmin = user.IsInRole("Admin");
 
@@ -52,6 +54,8 @@ public static class ReportApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(userId, $"Fetching details for report {reportId}");
             var report = await db.QueryFirstOrDefaultAsync<ReportDetails>(
                 @"SELECT r.*, ua.nick as author_nick, ut.nick as target_user_nick, p.text as post_text
                   FROM report r
@@ -74,12 +78,14 @@ public static class ReportApi
             .RequireAuthorization(policy => policy.RequireRole("Admin"))
             .WithTags("Admin");
 
-        adminGroup.MapPost("/{reportId:long}/ban", async (long reportId, CreateBanRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        adminGroup.MapPost("/{reportId:long}/ban", async (long reportId, CreateBanRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ReportApiLogged(cfg, cache);
+            var loggedApi = new ReportApiLogged(cfg, cache, logService);
             var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(adminId, $"Admin fetching target for ban from report {reportId}");
             var report = await db.QueryFirstOrDefaultAsync<dynamic>(
                 "SELECT target_user_id FROM report WHERE id = @reportId", new { reportId });
 
@@ -87,6 +93,7 @@ public static class ReportApi
 
             long bannedUserId = (long)report.target_user_id;
 
+            await loggedApi.LogDbQuery(adminId, $"Admin inserting ban for user {bannedUserId}");
             var banId = await db.QueryFirstAsync<long>(
                 @"INSERT INTO ban (banned_user_id, admin_id, report_id, end_date, reason)
                   VALUES (@bannedUserId, @adminId, @reportId, @endDate, @reason)
@@ -104,17 +111,20 @@ public static class ReportApi
             return Results.Created($"/admin/bans/{banId}", new { banId });
         });
 
-        adminGroup.MapDelete("/bans/{banId:long}", async (long banId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        adminGroup.MapDelete("/bans/{banId:long}", async (long banId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ReportApiLogged(cfg, cache);
+            var loggedApi = new ReportApiLogged(cfg, cache, logService);
             var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(adminId, $"Admin fetching ban info for id {banId}");
             var ban = await db.QueryFirstOrDefaultAsync<dynamic>(
                 "SELECT banned_user_id FROM ban WHERE id = @banId", new { banId });
 
             if (ban == null) return Results.NotFound("Ban not found");
 
+            await loggedApi.LogDbQuery(adminId, $"Admin terminating ban {banId}");
             await db.ExecuteAsync(
                 "UPDATE ban SET end_date = now() - interval '1 minute' WHERE id = @banId", new { banId });
 
@@ -125,15 +135,17 @@ public static class ReportApi
             return Results.Ok();
         });
 
-        adminGroup.MapGet("/bans", async (IDistributedCache cache, IConfiguration cfg, int page = 1) =>
+        adminGroup.MapGet("/bans", async (IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1) =>
         {
-            var loggedApi = new ReportApiLogged(cfg, cache);
+            var loggedApi = new ReportApiLogged(cfg, cache, logService);
             string cacheKey = $"admin:bans:p:{page}";
             
             var cached = await cache.GetStringAsync(cacheKey);
             if (cached != null) return Results.Ok(JsonSerializer.Deserialize<IEnumerable<BanDetails>>(cached));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(null, "Admin fetching active bans list");
             var bans = await db.QueryAsync<BanDetails>(
                 @"SELECT b.*, bu.nick as banned_user_nick, au.nick as admin_nick, r.comment as report_comment
                   FROM ban b
@@ -152,12 +164,13 @@ public static class ReportApi
 
     private class ReportApiLogged : LoggedApi
     {
-        public ReportApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
+        public ReportApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
-    // DTOs
     public class CreateReportRequest { public string comment { get; set; } = string.Empty; }
     public class CreateBanRequest { public DateTime? end_date { get; set; } public string reason { get; set; } = string.Empty; }
+    
     public class ReportDetails
     {
         public long id { get; set; }
@@ -168,6 +181,7 @@ public static class ReportApi
         public string? target_user_nick { get; set; }
         public string? post_text { get; set; }
     }
+    
     public class BanDetails
     {
         public long id { get; set; }

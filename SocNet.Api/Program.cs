@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SocNet.Api.Api;
+using SocNet.Api.Mongo;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -63,6 +64,7 @@ builder.Services.AddAuthentication(options =>
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<MongoLogService>();
 
 var app = builder.Build();
 
@@ -80,5 +82,6 @@ app.MapPostEndpoints(configuration);
 app.MapSubscriptionEndpoints(configuration);
 app.MapChatEndpoints(configuration);
 app.MapReportEndpoints(configuration);
+app.MapLogAdminEndpoints();
 
 app.Run();

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
+using SocNet.Api.Mongo;
 
 namespace SocNet.Api.Api;
 
@@ -15,9 +16,9 @@ public static class UserApi
             .RequireAuthorization()
             .WithTags("Users");
 
-        group.MapGet("/profile", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/profile", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"user:profile:{userId}";
 
@@ -28,6 +29,8 @@ public static class UserApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(userId, "Fetching user profile details");
             var profile = await db.QueryFirstOrDefaultAsync<UserProfile>(
                 @"SELECT u.id, u.nick, u.is_admin, u.created_at,
                          m.file_path as avatar_path,
@@ -49,12 +52,13 @@ public static class UserApi
             return Results.Ok(profile);
         });
 
-        group.MapGet("/search", async (string query, IDistributedCache cache, IConfiguration cfg, int limit = 20) =>
+        group.MapGet("/search", async (string query, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int limit = 20) =>
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
                 return Results.BadRequest("Search query must be at least 2 characters");
 
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"user:search:{query.ToLower()}:{limit}";
 
             var cachedSearch = await cache.GetStringAsync(cacheKey);
@@ -64,6 +68,8 @@ public static class UserApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(userId, $"User search: {query}");
             var users = await db.QueryAsync<UserSearchResult>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path
                   FROM ""user"" u
@@ -81,15 +87,16 @@ public static class UserApi
             return Results.Ok(users);
         });
 
-        group.MapPut("/profile", async (UpdateProfileRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPut("/profile", async (UpdateProfileRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
             if (!string.IsNullOrWhiteSpace(req.nick))
             {
+                await loggedApi.LogDbQuery(userId, "Checking nick availability");
                 var existing = await db.QueryFirstOrDefaultAsync<long?>(
                     @"SELECT id FROM ""user"" WHERE nick = @nick AND id != @userId",
                     new { nick = req.nick, userId });
@@ -116,6 +123,8 @@ public static class UserApi
             if (updateFields.Any())
             {
                 var sql = $"UPDATE \"user\" SET {string.Join(", ", updateFields)} WHERE id = @userId";
+                
+                await loggedApi.LogDbQuery(userId, "Executing profile update");
                 await db.ExecuteAsync(sql, parameters);
 
                 await cache.RemoveAsync($"user:profile:{userId}");
@@ -125,9 +134,10 @@ public static class UserApi
             return Results.Ok();
         });
 
-        group.MapGet("/{userId:long}/followers", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
+        group.MapGet("/{userId:long}/followers", async (long userId, ClaimsPrincipal currentUser, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 20) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var currentUserId = long.Parse(currentUser.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"user:followers:{userId}:p:{page}";
 
             var cachedFollowers = await cache.GetStringAsync(cacheKey);
@@ -137,6 +147,8 @@ public static class UserApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(currentUserId, $"Fetching followers for user {userId}");
             var followers = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
                   FROM subscription s
@@ -155,9 +167,10 @@ public static class UserApi
             return Results.Ok(followers);
         });
 
-        group.MapGet("/{userId:long}/following", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
+        group.MapGet("/{userId:long}/following", async (long userId, ClaimsPrincipal currentUser, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 20) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var currentUserId = long.Parse(currentUser.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"user:following:{userId}:p:{page}";
 
             var cachedFollowing = await cache.GetStringAsync(cacheKey);
@@ -167,6 +180,8 @@ public static class UserApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(currentUserId, $"Fetching following list for user {userId}");
             var following = await db.QueryAsync<UserSummary>(
                 @"SELECT u.id, u.nick, m.file_path as avatar_path, s.created_at as relation_date
                   FROM subscription s
@@ -189,9 +204,10 @@ public static class UserApi
             .RequireAuthorization(policy => policy.RequireRole("Admin"))
             .WithTags("Admin");
 
-        adminGroup.MapGet("/", async (IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 50) =>
+        adminGroup.MapGet("/", async (ClaimsPrincipal admin, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 50) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var adminId = long.Parse(admin.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"admin:users:p:{page}";
 
             var cachedUsers = await cache.GetStringAsync(cacheKey);
@@ -201,6 +217,8 @@ public static class UserApi
             }
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(adminId, "Admin fetching all users list");
             var users = await db.QueryAsync<UserAdminView>(
                 @"SELECT u.id, u.nick, u.is_admin, u.created_at,
                          m.file_path as avatar_path,
@@ -221,13 +239,14 @@ public static class UserApi
             return Results.Ok(users);
         });
 
-        adminGroup.MapPut("/{userId:long}/role", async (long userId, UpdateRoleRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        adminGroup.MapPut("/{userId:long}/role", async (long userId, UpdateRoleRequest req, ClaimsPrincipal admin, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
-            var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var adminId = long.Parse(admin.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(adminId, $"Admin updating role for user {userId}");
             await db.ExecuteAsync(
                 "UPDATE \"user\" SET is_admin = @isAdmin WHERE id = @userId",
                 new { userId, isAdmin = req.is_admin });
@@ -241,13 +260,14 @@ public static class UserApi
             return Results.Ok();
         });
 
-        adminGroup.MapDelete("/{userId:long}", async (long userId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        adminGroup.MapDelete("/{userId:long}", async (long userId, ClaimsPrincipal admin, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new UserApiLogged(cfg, cache);
-            var adminId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var loggedApi = new UserApiLogged(cfg, cache, logService);
+            var adminId = long.Parse(admin.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(adminId, $"Admin deleting user {userId}");
             await db.ExecuteAsync("DELETE FROM \"user\" WHERE id = @userId", new { userId });
 
             await cache.RemoveAsync($"user:profile:{userId}");
@@ -264,9 +284,11 @@ public static class UserApi
 
     private class UserApiLogged : LoggedApi
     {
-        public UserApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
+        public UserApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
+    // DTOs
     public class UserProfile
     {
         public long id { get; set; }

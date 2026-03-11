@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
+using SocNet.Api.Mongo; 
 
 namespace SocNet.Api.Api;
 
@@ -15,9 +16,9 @@ public static class ChatApi
             .RequireAuthorization()
             .WithTags("Chat");
 
-        group.MapGet("/", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"chats:{userId}:p:1";
 
@@ -54,9 +55,9 @@ public static class ChatApi
             return Results.Ok(chats);
         });
 
-        group.MapPut("/with/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPut("/with/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             
             if (userId == targetUserId) return Results.BadRequest("Cannot create chat with yourself");
@@ -85,9 +86,9 @@ public static class ChatApi
             return Results.Created($"/chats/{chatId}", new { chatId });
         });
 
-        group.MapGet("/{chatId:long}/messages", async (long chatId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/{chatId:long}/messages", async (long chatId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"messages:{chatId}";
 
@@ -121,9 +122,9 @@ public static class ChatApi
             return Results.Ok(messages);
         });
 
-        group.MapPost("/{chatId:long}/messages", async (long chatId, SendMessageRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/{chatId:long}/messages", async (long chatId, SendMessageRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             
             if (await loggedApi.IsUserBanned(userId)) return Results.BadRequest("User is banned");
@@ -153,9 +154,9 @@ public static class ChatApi
             return Results.Created($"/chats/{chatId}/messages/{message.id}", message);
         });
 
-        group.MapPut("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, UpdateMessageRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPut("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, UpdateMessageRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -167,9 +168,9 @@ public static class ChatApi
             return Results.Ok();
         });
 
-        group.MapDelete("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapDelete("/{chatId:long}/messages/{messageId:long}", async (long chatId, long messageId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new ChatApiLogged(cfg, cache);
+            var loggedApi = new ChatApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
@@ -185,7 +186,8 @@ public static class ChatApi
 
     private class ChatApiLogged : LoggedApi
     {
-        public ChatApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
+        public ChatApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
     public class ChatSummary

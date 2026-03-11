@@ -3,6 +3,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
+using SocNet.Api.Mongo;
 
 namespace SocNet.Api.Api;
 
@@ -10,12 +11,14 @@ public abstract class LoggedApi
 {
     private readonly string _connectionString;
     protected readonly IDistributedCache Cache;
+    protected readonly MongoLogService LogService;
 
-    protected LoggedApi(IConfiguration config, IDistributedCache cache)
+    protected LoggedApi(IConfiguration config, IDistributedCache cache, MongoLogService logService)
     {
         _connectionString = config.GetConnectionString("DefaultConnection")
                             ?? throw new Exception("Connection string not found");
         Cache = cache;
+        LogService = logService;
     }
 
     public string ConnectionString => _connectionString;
@@ -24,14 +27,50 @@ public abstract class LoggedApi
     {
         try
         {
-            using IDbConnection db = new NpgsqlConnection(_connectionString);
-            await db.ExecuteAsync(
-                "INSERT INTO log (user_id, details) VALUES (@userId, @details)",
-                new { userId, details = $"{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}: {action}" });
+            await LogService.LogAsync(new LogEvent 
+            { 
+                UserId = userId, 
+                EventType = LogEventType.UserAction, 
+                Details = action 
+            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to log action: {ex.Message}");
+            Console.WriteLine($"Failed to log action to MongoDB: {ex.Message}");
+        }
+    }
+
+    public async Task LogDbQuery(long? userId, string query)
+    {
+        try
+        {
+            await LogService.LogAsync(new LogEvent 
+            { 
+                UserId = userId, 
+                EventType = LogEventType.DatabaseQuery, 
+                Details = query 
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to log query to MongoDB: {ex.Message}");
+        }
+    }
+
+    public async Task LogException(long? userId, Exception exception)
+    {
+        try
+        {
+            await LogService.LogAsync(new LogEvent 
+            { 
+                UserId = userId, 
+                EventType = LogEventType.Exception, 
+                Details = exception.ToString() 
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to log exception to MongoDB: {ex.Message}");
         }
     }
 
@@ -62,34 +101,8 @@ public abstract class LoggedApi
         return isBanned;
     }
 
-    public async Task<string[]> GetUserRoles(long userId)
-    {
-        string cacheKey = $"user:roles:{userId}";
-        var cached = await Cache.GetStringAsync(cacheKey);
-
-        if (cached != null)
-        {
-            return JsonSerializer.Deserialize<string[]>(cached) ?? Array.Empty<string>();
-        }
-
-        using IDbConnection db = new NpgsqlConnection(_connectionString);
-        var roles = (await db.QueryAsync<string>(
-            @"SELECT r.name FROM role r 
-              JOIN user_role ur ON r.id = ur.role_id 
-              WHERE ur.user_id = @userId",
-            new { userId })).ToArray();
-
-        await Cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(roles), new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
-        });
-
-        return roles;
-    }
-
     public async Task InvalidateUserCache(long userId)
     {
         await Cache.RemoveAsync($"user:status:ban:{userId}");
-        await Cache.RemoveAsync($"user:roles:{userId}");
     }
 }

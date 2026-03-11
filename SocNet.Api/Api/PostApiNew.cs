@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Data;
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
@@ -5,6 +7,7 @@ using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
 using SocNet.Api.Entities;
+using SocNet.Api.Mongo; 
 
 namespace SocNet.Api.Api;
 
@@ -16,9 +19,9 @@ public static class PostApi
             .RequireAuthorization()
             .WithTags("Posts");
 
-        group.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/", async (CreatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId))
@@ -30,6 +33,7 @@ public static class PostApi
                        VALUES (@text, @authorId, @answerToId, @mediaId)
                        RETURNING *";
 
+            await loggedApi.LogDbQuery(userId, "INSERT INTO post");
             var post = await db.QueryFirstAsync<Post>(sql, new
             {
                 text = req.text,
@@ -48,9 +52,9 @@ public static class PostApi
             return Results.Created($"/posts/{post.id}", post);
         });
 
-        group.MapGet("/{postId:long}", async (long postId, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/{postId:long}", async (long postId, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             string cacheKey = $"post:{postId}";
             
             var cachedPost = await cache.GetStringAsync(cacheKey);
@@ -59,6 +63,7 @@ public static class PostApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(null, $"SELECT post details for id {postId}");
             var post = await db.QueryFirstOrDefaultAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
@@ -96,9 +101,14 @@ public static class PostApi
             return Results.Ok(result);
         });
 
-        group.MapGet("/feed", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
+        group.MapGet("/feed", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 20) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            if (page == 0 || pageSize == 0)
+            {
+                Results.Ok(new List<PostDetails>());
+            }
+            
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"feed:{userId}:p:{page}";
 
@@ -108,6 +118,7 @@ public static class PostApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, "SELECT feed posts");
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT DISTINCT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
@@ -133,9 +144,9 @@ public static class PostApi
             return Results.Ok(posts);
         });
 
-        group.MapGet("/user/{userId:long}", async (long userId, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
+        group.MapGet("/user/{userId:long}", async (long userId, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 20) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             string cacheKey = $"user_posts:{userId}:p:{page}";
 
             var cachedUserPosts = await cache.GetStringAsync(cacheKey);
@@ -143,6 +154,8 @@ public static class PostApi
                 return Results.Ok(JsonSerializer.Deserialize<IEnumerable<PostDetails>>(cachedUserPosts));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(null, $"SELECT posts for user {userId}");
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
@@ -167,9 +180,9 @@ public static class PostApi
             return Results.Ok(posts);
         });
 
-        group.MapPut("/{postId:long}", async (long postId, UpdatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPut("/{postId:long}", async (long postId, UpdatePostRequest req, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -181,6 +194,7 @@ public static class PostApi
             if (!authorId.HasValue) return Results.NotFound();
             if (authorId.Value != userId) return Results.BadRequest("Only author can edit post");
 
+            await loggedApi.LogDbQuery(userId, $"UPDATE post {postId}");
             await db.ExecuteAsync(
                 "UPDATE post SET text = @text, media_id = @mediaId WHERE id = @postId",
                 new { postId, text = req.text, mediaId = req.media_id });
@@ -192,9 +206,9 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapDelete("/{postId:long}", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -206,6 +220,7 @@ public static class PostApi
             if (postData == null) return Results.NotFound();
             if ((long)postData.author_id != userId) return Results.BadRequest("Only author can delete post");
 
+            await loggedApi.LogDbQuery(userId, $"DELETE FROM post {postId}");
             await db.ExecuteAsync("DELETE FROM post WHERE id = @postId", new { postId });
 
             await cache.RemoveAsync($"post:{postId}");
@@ -217,9 +232,9 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapPost("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (await loggedApi.IsUserBanned(userId)) return Results.BadRequest("User is banned");
@@ -232,6 +247,7 @@ public static class PostApi
 
             if (!postExists) return Results.NotFound("Post not found");
 
+            await loggedApi.LogDbQuery(userId, $"INSERT like for post {postId}");
             await db.ExecuteAsync(
                 @"INSERT INTO ""like"" (post_id, user_id) VALUES (@postId, @userId)
                   ON CONFLICT (post_id, user_id) DO NOTHING",
@@ -243,13 +259,14 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapDelete("/{postId:long}/like", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, $"DELETE like from post {postId}");
             await db.ExecuteAsync(
                 @"DELETE FROM ""like"" WHERE post_id = @postId AND user_id = @userId",
                 new { postId, userId });
@@ -260,9 +277,9 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapPost("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
@@ -273,6 +290,7 @@ public static class PostApi
 
             if (!postExists) return Results.NotFound("Post not found");
 
+            await loggedApi.LogDbQuery(userId, $"INSERT favorite post {postId}");
             await db.ExecuteAsync(
                 @"INSERT INTO favorite (user_id, post_id) VALUES (@userId, @postId)
                   ON CONFLICT (user_id, post_id) DO NOTHING",
@@ -284,13 +302,14 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapDelete("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapDelete("/{postId:long}/favorite", async (long postId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, $"DELETE favorite post {postId}");
             await db.ExecuteAsync(
                 @"DELETE FROM favorite WHERE user_id = @userId AND post_id = @postId",
                 new { userId, postId });
@@ -301,9 +320,9 @@ public static class PostApi
             return Results.Ok();
         });
 
-        group.MapGet("/favorites", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, int page = 1, int pageSize = 20) =>
+        group.MapGet("/favorites", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService, int page = 1, int pageSize = 20) =>
         {
-            var loggedApi = new PostApiLogged(cfg, cache);
+            var loggedApi = new PostApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"favorites:{userId}:p:{page}";
 
@@ -313,6 +332,7 @@ public static class PostApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, "SELECT favorite posts");
             var posts = await db.QueryAsync<PostDetails>(
                 @"SELECT p.id, p.text, p.answer_to_id, p.created_at,
                          u.nick as author_nick, u.id as author_id,
@@ -344,7 +364,8 @@ public static class PostApi
 
     private class PostApiLogged : LoggedApi
     {
-        public PostApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
+        public PostApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
     public class CreatePostRequest

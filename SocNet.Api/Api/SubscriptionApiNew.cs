@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Caching.Distributed;
 using Npgsql;
+using SocNet.Api.Mongo;
 
 namespace SocNet.Api.Api;
 
@@ -15,9 +16,9 @@ public static class SubscriptionApi
             .RequireAuthorization()
             .WithTags("Subs");
 
-        group.MapPost("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapPost("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new SubscriptionApiLogged(cfg, cache);
+            var loggedApi = new SubscriptionApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             if (userId == targetUserId)
@@ -28,6 +29,7 @@ public static class SubscriptionApi
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, $"Subscription attempt to user {targetUserId}");
             await db.ExecuteAsync(
                 @"INSERT INTO subscription (user_from_id, user_to_id)
                   VALUES (@userId, @targetUserId)
@@ -40,13 +42,14 @@ public static class SubscriptionApi
             return Results.Ok();
         });
 
-        group.MapDelete("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapDelete("/{targetUserId:long}", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new SubscriptionApiLogged(cfg, cache);
+            var loggedApi = new SubscriptionApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
 
+            await loggedApi.LogDbQuery(userId, $"Unsubscription from user {targetUserId}");
             await db.ExecuteAsync(
                 @"DELETE FROM subscription
                   WHERE user_from_id = @userId AND user_to_id = @targetUserId",
@@ -58,9 +61,9 @@ public static class SubscriptionApi
             return Results.Ok();
         });
 
-        group.MapGet("/{targetUserId:long}/status", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/{targetUserId:long}/status", async (long targetUserId, ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new SubscriptionApiLogged(cfg, cache);
+            var loggedApi = new SubscriptionApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"sub:status:{userId}:{targetUserId}";
 
@@ -68,6 +71,8 @@ public static class SubscriptionApi
             if (cachedStatus != null) return Results.Ok(new { isSubscribed = bool.Parse(cachedStatus) });
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(userId, $"Check subscription status with {targetUserId}");
             var isSubscribed = await db.QueryFirstOrDefaultAsync<bool>(
                 @"SELECT EXISTS(SELECT 1 FROM subscription WHERE user_from_id = @userId AND user_to_id = @targetUserId)",
                 new { userId, targetUserId });
@@ -80,9 +85,9 @@ public static class SubscriptionApi
             return Results.Ok(new { isSubscribed });
         });
 
-        group.MapGet("/counts", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg) =>
+        group.MapGet("/counts", async (ClaimsPrincipal user, IDistributedCache cache, IConfiguration cfg, MongoLogService logService) =>
         {
-            var loggedApi = new SubscriptionApiLogged(cfg, cache);
+            var loggedApi = new SubscriptionApiLogged(cfg, cache, logService);
             var userId = long.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
             string cacheKey = $"sub:counts:{userId}";
 
@@ -90,6 +95,8 @@ public static class SubscriptionApi
             if (cachedCounts != null) return Results.Ok(JsonSerializer.Deserialize<SubscriptionCounts>(cachedCounts));
 
             using IDbConnection db = new NpgsqlConnection(loggedApi.ConnectionString);
+            
+            await loggedApi.LogDbQuery(userId, "Fetching subscription counts");
             var counts = await db.QueryFirstAsync<SubscriptionCounts>(
                 @"SELECT
                     (SELECT COUNT(*) FROM subscription WHERE user_to_id = @userId) as followers_count,
@@ -111,15 +118,14 @@ public static class SubscriptionApi
     {
         await cache.RemoveAsync($"sub:counts:{userId}");
         await cache.RemoveAsync($"sub:counts:{targetUserId}");
-        
         await cache.RemoveAsync($"sub:status:{userId}:{targetUserId}");
-        
         await cache.RemoveAsync($"feed:{userId}:p:1");
     }
 
     private class SubscriptionApiLogged : LoggedApi
     {
-        public SubscriptionApiLogged(IConfiguration config, IDistributedCache cache) : base(config, cache) { }
+        public SubscriptionApiLogged(IConfiguration config, IDistributedCache cache, MongoLogService logService) 
+            : base(config, cache, logService) { }
     }
 
     public class SubscriptionCounts
